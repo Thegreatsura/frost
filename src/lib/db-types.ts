@@ -1,3 +1,8 @@
+export interface EnvVar {
+  key: string;
+  value: string;
+}
+
 export interface ProjectsTable {
   id: string;
   name: string;
@@ -5,6 +10,7 @@ export interface ProjectsTable {
   branch: string;
   dockerfile_path: string;
   port: number;
+  env_vars: string;
   created_at: number;
 }
 

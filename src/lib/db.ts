@@ -19,24 +19,36 @@ export const db = new Kysely<DB>({
 });
 
 function runMigrations() {
-  const schemaPath = join(process.cwd(), "schema", "001-init.sql");
-  if (!existsSync(schemaPath)) {
+  const schema001 = join(process.cwd(), "schema", "001-init.sql");
+  if (!existsSync(schema001)) {
     return;
   }
 
-  const result = sqlite
+  const hasProjects = sqlite
     .prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='projects'",
     )
     .get();
 
-  if (result) {
-    return;
+  if (!hasProjects) {
+    const schema = readFileSync(schema001, "utf-8");
+    sqlite.exec(schema);
+    console.log("Applied 001-init migration");
   }
 
-  const schema = readFileSync(schemaPath, "utf-8");
-  sqlite.exec(schema);
-  console.log("Database migrated");
+  const columns = sqlite.prepare("PRAGMA table_info(projects)").all() as Array<{
+    name: string;
+  }>;
+  const hasEnvVars = columns.some((c) => c.name === "env_vars");
+
+  if (!hasEnvVars) {
+    const schema002 = join(process.cwd(), "schema", "002-env-vars.sql");
+    if (existsSync(schema002)) {
+      const schema = readFileSync(schema002, "utf-8");
+      sqlite.exec(schema);
+      console.log("Applied 002-env-vars migration");
+    }
+  }
 }
 
 runMigrations();

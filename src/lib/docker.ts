@@ -20,16 +20,20 @@ export async function buildImage(
   repoPath: string,
   imageName: string,
   dockerfilePath: string = "Dockerfile",
+  envVars?: Record<string, string>,
 ): Promise<BuildResult> {
   return new Promise((resolve) => {
     let log = "";
-    const proc = spawn(
-      "docker",
-      ["build", "-t", imageName, "-f", dockerfilePath, "."],
-      {
-        cwd: repoPath,
-      },
-    );
+    const args = ["build", "-t", imageName, "-f", dockerfilePath];
+    if (envVars) {
+      for (const [key, value] of Object.entries(envVars)) {
+        args.push("--build-arg", `${key}=${value}`);
+      }
+    }
+    args.push(".");
+    const proc = spawn("docker", args, {
+      cwd: repoPath,
+    });
 
     proc.stdout.on("data", (data) => {
       log += data.toString();
@@ -63,12 +67,21 @@ export async function runContainer(
   hostPort: number,
   containerPort: number,
   name: string,
+  envVars?: Record<string, string>,
 ): Promise<RunResult> {
   try {
     await stopContainer(name);
 
+    const envFlags = envVars
+      ? Object.entries(envVars)
+          .map(([k, v]) => `-e ${k}=${JSON.stringify(v)}`)
+          .join(" ")
+      : "";
     const { stdout } = await execAsync(
-      `docker run -d --name ${name} -p ${hostPort}:${containerPort} ${imageName}`,
+      `docker run -d --name ${name} -p ${hostPort}:${containerPort} ${envFlags} ${imageName}`.replace(
+        /\s+/g,
+        " ",
+      ),
     );
     const containerId = stdout.trim();
     return { success: true, containerId };

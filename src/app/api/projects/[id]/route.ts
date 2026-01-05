@@ -29,6 +29,54 @@ export async function GET(
   return NextResponse.json({ ...project, deployments });
 }
 
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  const body = await request.json();
+
+  const project = await db
+    .selectFrom("projects")
+    .selectAll()
+    .where("id", "=", id)
+    .executeTakeFirst();
+
+  if (!project) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const updates: Record<string, unknown> = {};
+  if (body.env_vars !== undefined) {
+    updates.env_vars = JSON.stringify(body.env_vars);
+  }
+  if (body.branch !== undefined) {
+    updates.branch = body.branch;
+  }
+  if (body.dockerfile_path !== undefined) {
+    updates.dockerfile_path = body.dockerfile_path;
+  }
+  if (body.port !== undefined) {
+    updates.port = body.port;
+  }
+
+  if (Object.keys(updates).length > 0) {
+    await db
+      .updateTable("projects")
+      .set(updates)
+      .where("id", "=", id)
+      .execute();
+  }
+
+  const updated = await db
+    .selectFrom("projects")
+    .selectAll()
+    .where("id", "=", id)
+    .executeTakeFirst();
+
+  return NextResponse.json(updated);
+}
+
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> },

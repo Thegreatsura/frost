@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
+import { EnvVarEditor } from "@/components/env-var-editor";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,18 +14,21 @@ import { Separator } from "@/components/ui/separator";
 export default function NewProjectPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [envVars, setEnvVars] = useState<{ key: string; value: string }[]>([]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
 
     const formData = new FormData(e.currentTarget);
+    const validEnvVars = envVars.filter((v) => v.key.trim() !== "");
     const data = {
       name: formData.get("name"),
       repo_url: formData.get("repo_url"),
       branch: formData.get("branch") || "main",
       dockerfile_path: formData.get("dockerfile_path") || "Dockerfile",
       port: parseInt(formData.get("port") as string, 10) || 3000,
+      env_vars: validEnvVars,
     };
 
     const res = await fetch("/api/projects", {
@@ -129,6 +133,15 @@ export default function NewProjectPage() {
                   className="w-32 border-neutral-700 bg-neutral-800 font-mono text-sm text-neutral-100 placeholder:text-neutral-500"
                 />
               </div>
+            </div>
+
+            <Separator className="bg-neutral-800" />
+
+            <div className="space-y-4">
+              <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">
+                Environment Variables
+              </p>
+              <EnvVarEditor value={envVars} onChange={setEnvVars} />
             </div>
 
             <Separator className="bg-neutral-800" />

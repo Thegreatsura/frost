@@ -1,9 +1,10 @@
 import { exec } from "node:child_process";
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { nanoid } from "nanoid";
 import { db } from "./db";
+import type { EnvVar } from "./db-types";
 import {
   buildImage,
   getAvailablePort,
@@ -98,10 +99,19 @@ async function runDeployment(
     branch: string;
     dockerfile_path: string;
     port: number;
+    env_vars: string;
   },
 ) {
   const repoPath = join(REPOS_PATH, project.id);
   const containerName = `frost-${project.id}`.toLowerCase();
+
+  const envVarsList: EnvVar[] = project.env_vars
+    ? JSON.parse(project.env_vars)
+    : [];
+  const envVars: Record<string, string> = {};
+  for (const e of envVarsList) {
+    envVars[e.key] = e.value;
+  }
 
   try {
     await updateDeployment(deploymentId, { status: "cloning" });
@@ -127,6 +137,17 @@ async function runDeployment(
       .where("id", "=", deploymentId)
       .execute();
 
+    if (envVarsList.length > 0) {
+      const envFileContent = envVarsList
+        .map((e) => `${e.key}=${e.value}`)
+        .join("\n");
+      writeFileSync(join(repoPath, ".env"), envFileContent);
+      await appendLog(
+        deploymentId,
+        `Written ${envVarsList.length} env vars to .env\n`,
+      );
+    }
+
     await updateDeployment(deploymentId, { status: "building" });
     await appendLog(deploymentId, `\nBuilding image...\n`);
 
@@ -135,6 +156,7 @@ async function runDeployment(
       repoPath,
       imageName,
       project.dockerfile_path,
+      envVars,
     );
 
     await appendLog(deploymentId, buildResult.log);
@@ -152,6 +174,7 @@ async function runDeployment(
       hostPort,
       project.port,
       containerName,
+      envVars,
     );
 
     if (!runResult.success) {

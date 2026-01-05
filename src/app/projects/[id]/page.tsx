@@ -1,10 +1,11 @@
 "use client";
 
-import { ExternalLink, Loader2, Rocket, Trash2 } from "lucide-react";
+import { ExternalLink, Loader2, Pencil, Rocket, Trash2 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/empty-state";
+import { EnvVarEditor } from "@/components/env-var-editor";
 import { StatusDot } from "@/components/status-dot";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,6 +23,11 @@ interface Deployment {
   error_message: string | null;
 }
 
+interface EnvVar {
+  key: string;
+  value: string;
+}
+
 interface Project {
   id: string;
   name: string;
@@ -29,6 +35,7 @@ interface Project {
   branch: string;
   dockerfile_path: string;
   port: number;
+  env_vars: string;
   deployments: Deployment[];
 }
 
@@ -40,6 +47,9 @@ export default function ProjectPage() {
   const [deploying, setDeploying] = useState(false);
   const [selectedDeployment, setSelectedDeployment] =
     useState<Deployment | null>(null);
+  const [editingEnv, setEditingEnv] = useState(false);
+  const [envVars, setEnvVars] = useState<EnvVar[]>([]);
+  const [savingEnv, setSavingEnv] = useState(false);
 
   const fetchProject = useCallback(async () => {
     const res = await fetch(`/api/projects/${params.id}`);
@@ -87,6 +97,31 @@ export default function ProjectPage() {
     } else {
       toast.error("Failed to delete project");
     }
+  }
+
+  function handleEditEnv() {
+    if (project) {
+      setEnvVars(project.env_vars ? JSON.parse(project.env_vars) : []);
+      setEditingEnv(true);
+    }
+  }
+
+  async function handleSaveEnv() {
+    setSavingEnv(true);
+    const validEnvVars = envVars.filter((v) => v.key.trim() !== "");
+    const res = await fetch(`/api/projects/${params.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ env_vars: validEnvVars }),
+    });
+    if (res.ok) {
+      toast.success("Environment variables saved");
+      setEditingEnv(false);
+      await fetchProject();
+    } else {
+      toast.error("Failed to save");
+    }
+    setSavingEnv(false);
   }
 
   if (loading) {
@@ -262,6 +297,68 @@ export default function ProjectPage() {
               </dd>
             </div>
           </dl>
+        </CardContent>
+      </Card>
+
+      <Card className="bg-neutral-900 border-neutral-800">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center justify-between text-sm font-medium text-neutral-300">
+            <span>Environment Variables</span>
+            {!editingEnv && (
+              <Button variant="ghost" size="sm" onClick={handleEditEnv}>
+                <Pencil className="mr-1 h-3 w-3" />
+                Edit
+              </Button>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {editingEnv ? (
+            <div className="space-y-4">
+              <EnvVarEditor value={envVars} onChange={setEnvVars} />
+              <div className="flex gap-2">
+                <Button size="sm" onClick={handleSaveEnv} disabled={savingEnv}>
+                  {savingEnv ? (
+                    <>
+                      <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                      Saving
+                    </>
+                  ) : (
+                    "Save"
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setEditingEnv(false)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {(() => {
+                const vars: EnvVar[] = project.env_vars
+                  ? JSON.parse(project.env_vars)
+                  : [];
+                if (vars.length === 0) {
+                  return (
+                    <p className="text-sm text-neutral-500">
+                      No environment variables configured
+                    </p>
+                  );
+                }
+                return vars.map((v) => (
+                  <div key={v.key} className="flex gap-2 font-mono text-sm">
+                    <span className="text-neutral-300">{v.key}</span>
+                    <span className="text-neutral-600">=</span>
+                    <span className="text-neutral-500">••••••••</span>
+                  </div>
+                ));
+              })()}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

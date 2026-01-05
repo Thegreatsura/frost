@@ -33,6 +33,7 @@ export async function POST(request: Request) {
     branch = "main",
     dockerfile_path = "Dockerfile",
     port = 3000,
+    env_vars = [],
   } = body;
 
   if (!name || !repo_url) {
@@ -54,6 +55,7 @@ export async function POST(request: Request) {
       branch,
       dockerfile_path,
       port,
+      env_vars: JSON.stringify(env_vars),
       created_at: now,
     })
     .execute();

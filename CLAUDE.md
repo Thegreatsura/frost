@@ -48,6 +48,7 @@ Tables: `projects`, `deployments`
 5. Health check
 
 ## Conventions
+- Use bun, not node/npm/pnpm
 - Image names lowercase: `frost-{projectid}:{sha}`
 - Container names: `frost-{projectid}`
 - Host ports: 10000-20000 range
