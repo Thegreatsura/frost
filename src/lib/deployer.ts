@@ -1,16 +1,16 @@
-import { exec } from "child_process";
-import { promisify } from "util";
+import { exec } from "node:child_process";
+import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { promisify } from "node:util";
+import { nanoid } from "nanoid";
 import { db } from "./db";
 import {
   buildImage,
+  getAvailablePort,
   runContainer,
   stopContainer,
   waitForHealthy,
-  getAvailablePort,
 } from "./docker";
-import { existsSync, rmSync, mkdirSync } from "fs";
-import { join } from "path";
-import { nanoid } from "nanoid";
 
 const execAsync = promisify(exec);
 
@@ -37,7 +37,7 @@ async function updateDeployment(
     container_id?: string;
     host_port?: number;
     finished_at?: number;
-  }
+  },
 ) {
   await db
     .updateTable("deployments")
@@ -98,7 +98,7 @@ async function runDeployment(
     branch: string;
     dockerfile_path: string;
     port: number;
-  }
+  },
 ) {
   const repoPath = join(REPOS_PATH, project.id);
   const containerName = `shipit-${project.id}`.toLowerCase();
@@ -112,11 +112,13 @@ async function runDeployment(
     }
 
     const { stdout: cloneResult } = await execAsync(
-      `git clone --depth 1 --branch ${project.branch} ${project.repo_url} ${repoPath}`
+      `git clone --depth 1 --branch ${project.branch} ${project.repo_url} ${repoPath}`,
     );
     await appendLog(deploymentId, cloneResult || "Cloned successfully\n");
 
-    const { stdout: commitResult } = await execAsync(`git -C ${repoPath} rev-parse HEAD`);
+    const { stdout: commitResult } = await execAsync(
+      `git -C ${repoPath} rev-parse HEAD`,
+    );
     const commitSha = commitResult.trim().substring(0, 7);
 
     await db
@@ -132,7 +134,7 @@ async function runDeployment(
     const buildResult = await buildImage(
       repoPath,
       imageName,
-      project.dockerfile_path
+      project.dockerfile_path,
     );
 
     await appendLog(deploymentId, buildResult.log);
@@ -149,7 +151,7 @@ async function runDeployment(
       imageName,
       hostPort,
       project.port,
-      containerName
+      containerName,
     );
 
     if (!runResult.success) {
@@ -158,7 +160,7 @@ async function runDeployment(
 
     await appendLog(
       deploymentId,
-      `Container started: ${runResult.containerId.substring(0, 12)}\n`
+      `Container started: ${runResult.containerId.substring(0, 12)}\n`,
     );
     await appendLog(deploymentId, `Waiting for container to be healthy...\n`);
 
@@ -176,7 +178,7 @@ async function runDeployment(
 
     await appendLog(
       deploymentId,
-      `\nDeployment successful! App available at http://localhost:${hostPort}\n`
+      `\nDeployment successful! App available at http://localhost:${hostPort}\n`,
     );
 
     const previousDeployments = await db

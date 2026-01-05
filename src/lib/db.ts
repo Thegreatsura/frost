@@ -1,8 +1,8 @@
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import Database from "better-sqlite3";
 import { Kysely, SqliteDialect } from "kysely";
 import type { DB } from "./db-types";
-import { existsSync, mkdirSync, readFileSync } from "fs";
-import { join } from "path";
 
 const DB_PATH = join(process.cwd(), "data", "shipit.db");
 
@@ -25,7 +25,9 @@ function runMigrations() {
   }
 
   const result = sqlite
-    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='projects'")
+    .prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='projects'",
+    )
     .get();
 
   if (result) {

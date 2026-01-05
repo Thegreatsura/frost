@@ -1,6 +1,6 @@
-import { db } from "@/lib/db";
 import { nanoid } from "nanoid";
 import { NextResponse } from "next/server";
+import { db } from "@/lib/db";
 
 export async function GET() {
   const projects = await db.selectFrom("projects").selectAll().execute();
@@ -9,10 +9,19 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const body = await request.json();
-  const { name, repo_url, branch = "main", dockerfile_path = "Dockerfile", port = 3000 } = body;
+  const {
+    name,
+    repo_url,
+    branch = "main",
+    dockerfile_path = "Dockerfile",
+    port = 3000,
+  } = body;
 
   if (!name || !repo_url) {
-    return NextResponse.json({ error: "name and repo_url required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "name and repo_url required" },
+      { status: 400 },
+    );
   }
 
   const id = nanoid();

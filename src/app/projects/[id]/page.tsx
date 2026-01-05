@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -32,9 +32,10 @@ export default function ProjectPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [deploying, setDeploying] = useState(false);
-  const [selectedDeployment, setSelectedDeployment] = useState<Deployment | null>(null);
+  const [selectedDeployment, setSelectedDeployment] =
+    useState<Deployment | null>(null);
 
-  async function fetchProject() {
+  const fetchProject = useCallback(async () => {
     const res = await fetch(`/api/projects/${params.id}`);
     if (res.ok) {
       const data = await res.json();
@@ -44,13 +45,13 @@ export default function ProjectPage() {
       }
     }
     setLoading(false);
-  }
+  }, [params.id]);
 
   useEffect(() => {
     fetchProject();
     const interval = setInterval(fetchProject, 2000);
     return () => clearInterval(interval);
-  }, [params.id]);
+  }, [fetchProject]);
 
   async function handleDeploy() {
     setDeploying(true);
@@ -72,7 +73,9 @@ export default function ProjectPage() {
   if (loading) return <div>Loading...</div>;
   if (!project) return <div>Project not found</div>;
 
-  const runningDeployment = project.deployments.find((d) => d.status === "running");
+  const runningDeployment = project.deployments.find(
+    (d) => d.status === "running",
+  );
 
   return (
     <div className="space-y-6">
@@ -126,6 +129,7 @@ export default function ProjectPage() {
                 <div className="divide-y">
                   {project.deployments.map((d) => (
                     <button
+                      type="button"
                       key={d.id}
                       onClick={() => setSelectedDeployment(d)}
                       className={`w-full text-left p-4 hover:bg-muted ${
@@ -133,7 +137,9 @@ export default function ProjectPage() {
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="font-mono text-sm">{d.commit_sha}</span>
+                        <span className="font-mono text-sm">
+                          {d.commit_sha}
+                        </span>
                         <StatusBadge status={d.status} />
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">
@@ -207,7 +213,9 @@ function StatusBadge({ status }: { status: string }) {
   };
 
   return (
-    <span className={`px-2 py-1 rounded text-xs font-medium ${colors[status] || colors.pending}`}>
+    <span
+      className={`px-2 py-1 rounded text-xs font-medium ${colors[status] || colors.pending}`}
+    >
       {status}
     </span>
   );

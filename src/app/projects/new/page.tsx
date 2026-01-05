@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function NewProjectPage() {
   const router = useRouter();
@@ -21,7 +21,7 @@ export default function NewProjectPage() {
       repo_url: formData.get("repo_url"),
       branch: formData.get("branch") || "main",
       dockerfile_path: formData.get("dockerfile_path") || "Dockerfile",
-      port: parseInt(formData.get("port") as string) || 3000,
+      port: parseInt(formData.get("port") as string, 10) || 3000,
     };
 
     const res = await fetch("/api/projects", {
@@ -97,7 +97,11 @@ export default function NewProjectPage() {
               <Button type="submit" disabled={loading}>
                 {loading ? "Creating..." : "Create Project"}
               </Button>
-              <Button type="button" variant="outline" onClick={() => router.back()}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => router.back()}
+              >
                 Cancel
               </Button>
             </div>

@@ -29,7 +29,9 @@ export default async function Home() {
               className="block p-4 border rounded-lg hover:border-primary"
             >
               <h2 className="font-semibold">{project.name}</h2>
-              <p className="text-sm text-muted-foreground">{project.repo_url}</p>
+              <p className="text-sm text-muted-foreground">
+                {project.repo_url}
+              </p>
               <p className="text-xs text-muted-foreground mt-1">
                 {project.branch} · port {project.port}
               </p>

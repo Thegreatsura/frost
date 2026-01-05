@@ -1,5 +1,5 @@
-import { exec, spawn } from "child_process";
-import { promisify } from "util";
+import { exec, spawn } from "node:child_process";
+import { promisify } from "node:util";
 
 const execAsync = promisify(exec);
 
@@ -19,13 +19,17 @@ export interface RunResult {
 export async function buildImage(
   repoPath: string,
   imageName: string,
-  dockerfilePath: string = "Dockerfile"
+  dockerfilePath: string = "Dockerfile",
 ): Promise<BuildResult> {
   return new Promise((resolve) => {
     let log = "";
-    const proc = spawn("docker", ["build", "-t", imageName, "-f", dockerfilePath, "."], {
-      cwd: repoPath,
-    });
+    const proc = spawn(
+      "docker",
+      ["build", "-t", imageName, "-f", dockerfilePath, "."],
+      {
+        cwd: repoPath,
+      },
+    );
 
     proc.stdout.on("data", (data) => {
       log += data.toString();
@@ -39,7 +43,12 @@ export async function buildImage(
       if (code === 0) {
         resolve({ success: true, imageName, log });
       } else {
-        resolve({ success: false, imageName, log, error: `Build exited with code ${code}` });
+        resolve({
+          success: false,
+          imageName,
+          log,
+          error: `Build exited with code ${code}`,
+        });
       }
     });
 
@@ -53,13 +62,13 @@ export async function runContainer(
   imageName: string,
   hostPort: number,
   containerPort: number,
-  name: string
+  name: string,
 ): Promise<RunResult> {
   try {
     await stopContainer(name);
 
     const { stdout } = await execAsync(
-      `docker run -d --name ${name} -p ${hostPort}:${containerPort} ${imageName}`
+      `docker run -d --name ${name} -p ${hostPort}:${containerPort} ${imageName}`,
     );
     const containerId = stdout.trim();
     return { success: true, containerId };
@@ -84,7 +93,7 @@ export async function stopContainer(name: string): Promise<void> {
 export async function getContainerStatus(containerId: string): Promise<string> {
   try {
     const { stdout } = await execAsync(
-      `docker inspect --format='{{.State.Status}}' ${containerId}`
+      `docker inspect --format='{{.State.Status}}' ${containerId}`,
     );
     return stdout.trim().replace(/'/g, "");
   } catch {
@@ -95,7 +104,7 @@ export async function getContainerStatus(containerId: string): Promise<string> {
 export async function waitForHealthy(
   containerId: string,
   maxAttempts: number = 30,
-  intervalMs: number = 1000
+  intervalMs: number = 1000,
 ): Promise<boolean> {
   for (let i = 0; i < maxAttempts; i++) {
     const status = await getContainerStatus(containerId);
@@ -110,14 +119,17 @@ export async function waitForHealthy(
   return false;
 }
 
-export async function getAvailablePort(start: number = 10000, end: number = 20000): Promise<number> {
+export async function getAvailablePort(
+  start: number = 10000,
+  end: number = 20000,
+): Promise<number> {
   const usedPorts = new Set<number>();
 
   try {
     const { stdout } = await execAsync(`docker ps --format '{{.Ports}}'`);
     const portMatches = stdout.matchAll(/0\.0\.0\.0:(\d+)/g);
     for (const match of portMatches) {
-      usedPorts.add(parseInt(match[1]));
+      usedPorts.add(parseInt(match[1], 10));
     }
   } catch {
     // Ignore errors

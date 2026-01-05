@@ -1,10 +1,10 @@
+import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { stopContainer } from "@/lib/docker";
-import { NextResponse } from "next/server";
 
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
 
@@ -31,7 +31,7 @@ export async function GET(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
 

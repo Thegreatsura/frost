@@ -1,5 +1,3 @@
-import type { Generated } from "kysely";
-
 export interface ProjectsTable {
   id: string;
   name: string;
