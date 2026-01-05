@@ -1,0 +1,5 @@
+{
+  "database": "./data/shipit.db",
+  "driver": "sqlite",
+  "schema": "./schema"
+}
