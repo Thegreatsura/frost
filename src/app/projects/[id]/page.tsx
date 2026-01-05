@@ -2,7 +2,7 @@
 
 import { ExternalLink, Loader2, Pencil, Rocket, Trash2 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/empty-state";
 import { EnvVarEditor } from "@/components/env-var-editor";
@@ -49,26 +49,31 @@ export default function ProjectPage() {
   const [deploying, setDeploying] = useState(false);
   const [selectedDeployment, setSelectedDeployment] =
     useState<Deployment | null>(null);
+  const selectedDeploymentRef = useRef<Deployment | null>(null);
   const [editingEnv, setEditingEnv] = useState(false);
   const [envVars, setEnvVars] = useState<EnvVar[]>([]);
   const [savingEnv, setSavingEnv] = useState(false);
+
+  useEffect(() => {
+    selectedDeploymentRef.current = selectedDeployment;
+  }, [selectedDeployment]);
 
   const fetchProject = useCallback(async () => {
     const res = await fetch(`/api/projects/${params.id}`);
     if (res.ok) {
       const data = await res.json();
       setProject(data);
-      if (data.deployments.length > 0 && !selectedDeployment) {
+      if (data.deployments.length > 0 && !selectedDeploymentRef.current) {
         setSelectedDeployment(data.deployments[0]);
-      } else if (selectedDeployment) {
+      } else if (selectedDeploymentRef.current) {
         const updated = data.deployments.find(
-          (d: Deployment) => d.id === selectedDeployment.id,
+          (d: Deployment) => d.id === selectedDeploymentRef.current!.id,
         );
         if (updated) setSelectedDeployment(updated);
       }
     }
     setLoading(false);
-  }, [params.id, selectedDeployment]);
+  }, [params.id]);
 
   useEffect(() => {
     fetchProject();
