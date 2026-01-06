@@ -5,11 +5,7 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 
 const DEFAULT_SECRET = "frost-default-secret-change-me";
-
-function isAuthEnabled(): boolean {
-  const secret = process.env.FROST_JWT_SECRET;
-  return secret !== undefined && secret !== DEFAULT_SECRET;
-}
+const JWT_SECRET = process.env.FROST_JWT_SECRET || DEFAULT_SECRET;
 
 function getApiKey(): string | null {
   const secret = process.env.FROST_JWT_SECRET;
@@ -27,13 +23,10 @@ function verifyApiToken(token: string): boolean {
 }
 
 function verifySessionToken(token: string): boolean {
-  const secret = process.env.FROST_JWT_SECRET;
-  if (!secret) return false;
-
   const [data, signature] = token.split(".");
   if (!data || !signature) return false;
 
-  const expectedSignature = createHmac("sha256", secret)
+  const expectedSignature = createHmac("sha256", JWT_SECRET)
     .update(data)
     .digest("base64url");
 
@@ -49,10 +42,6 @@ function verifySessionToken(token: string): boolean {
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-
-  if (!isAuthEnabled()) {
-    return NextResponse.next();
-  }
 
   if (pathname === "/login" || pathname.startsWith("/api/auth/")) {
     return NextResponse.next();

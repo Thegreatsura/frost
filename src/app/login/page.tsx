@@ -1,7 +1,7 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,14 @@ import { Label } from "@/components/ui/label";
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [devPassword, setDevPassword] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/auth/dev-info")
+      .then((res) => res.json())
+      .then((data) => setDevPassword(data.devPassword))
+      .catch(() => {});
+  }, []);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -66,6 +74,12 @@ export default function LoginPage() {
               </div>
 
               {error && <p className="text-sm text-red-400">{error}</p>}
+
+              {devPassword && (
+                <p className="text-sm text-neutral-500">
+                  Dev mode password: <code className="text-neutral-400">{devPassword}</code>
+                </p>
+              )}
 
               <Button type="submit" disabled={loading} className="w-full">
                 {loading ? (

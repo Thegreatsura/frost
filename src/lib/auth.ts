@@ -7,9 +7,22 @@ const scryptAsync = promisify(scrypt);
 const DEFAULT_SECRET = "frost-default-secret-change-me";
 const JWT_SECRET = process.env.FROST_JWT_SECRET || DEFAULT_SECRET;
 const SESSION_EXPIRY_DAYS = 7;
+const DEV_PASSWORD = "dev";
+
+export function isDevMode(): boolean {
+  return JWT_SECRET === DEFAULT_SECRET;
+}
 
 export function isAuthEnabled(): boolean {
-  return JWT_SECRET !== DEFAULT_SECRET;
+  return true;
+}
+
+export function getDevPassword(): string | null {
+  return isDevMode() ? DEV_PASSWORD : null;
+}
+
+export async function verifyDevPassword(password: string): Promise<boolean> {
+  return isDevMode() && password === DEV_PASSWORD;
 }
 
 export async function hashPassword(password: string): Promise<string> {

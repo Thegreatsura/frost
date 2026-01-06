@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import {
   createSessionToken,
   getAdminPasswordHash,
+  isDevMode,
+  verifyDevPassword,
   verifyPassword,
 } from "@/lib/auth";
 
@@ -16,12 +18,18 @@ export async function POST(request: Request) {
     );
   }
 
-  const hash = await getAdminPasswordHash();
-  if (!hash) {
-    return NextResponse.json({ error: "setup not complete" }, { status: 503 });
+  let valid = false;
+
+  if (isDevMode()) {
+    valid = await verifyDevPassword(password);
+  } else {
+    const hash = await getAdminPasswordHash();
+    if (!hash) {
+      return NextResponse.json({ error: "setup not complete" }, { status: 503 });
+    }
+    valid = await verifyPassword(password, hash);
   }
 
-  const valid = await verifyPassword(password, hash);
   if (!valid) {
     return NextResponse.json({ error: "invalid password" }, { status: 401 });
   }
