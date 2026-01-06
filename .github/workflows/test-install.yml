@@ -1,0 +1,77 @@
+name: Test Install Script
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test-install:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build Frost
+        run: bun run build
+
+      - name: Setup admin password
+        run: bun run setup testpassword123
+
+      - name: Verify settings table
+        run: |
+          sqlite3 data/frost.db "SELECT key FROM settings;"
+
+      - name: Start Frost
+        run: |
+          FROST_JWT_SECRET=gh-action-test-secret nohup bun run start > /tmp/frost.log 2>&1 &
+          sleep 5
+          cat /tmp/frost.log
+
+      - name: Test unauthenticated redirect
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/)
+          echo "Status: $STATUS"
+          [ "$STATUS" = "307" ] || exit 1
+
+      - name: Test login
+        run: |
+          RESPONSE=$(curl -s -X POST http://localhost:3000/api/auth/login \
+            -H "Content-Type: application/json" \
+            -d '{"password":"testpassword123"}')
+          echo "Response: $RESPONSE"
+          echo "$RESPONSE" | grep -q '"success":true' || exit 1
+
+      - name: Test authenticated access
+        run: |
+          curl -s -c /tmp/cookies.txt -X POST http://localhost:3000/api/auth/login \
+            -H "Content-Type: application/json" \
+            -d '{"password":"testpassword123"}'
+          STATUS=$(curl -s -b /tmp/cookies.txt -o /dev/null -w "%{http_code}" http://localhost:3000/)
+          echo "Authenticated status: $STATUS"
+          [ "$STATUS" = "200" ] || exit 1
+
+      - name: Test wrong password
+        run: |
+          RESPONSE=$(curl -s -X POST http://localhost:3000/api/auth/login \
+            -H "Content-Type: application/json" \
+            -d '{"password":"wrongpassword"}')
+          echo "Response: $RESPONSE"
+          echo "$RESPONSE" | grep -q '"error":"invalid password"' || exit 1
+
+      - name: Validate install.sh syntax
+        run: bash -n install.sh
+
+      - name: Validate update.sh syntax
+        run: bash -n update.sh

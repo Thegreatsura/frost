@@ -75,6 +75,21 @@ function runMigrations() {
     sqlite.exec(schema);
     console.log("Applied 004-multi-container migration");
   }
+
+  const hasSettings = sqlite
+    .prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='settings'",
+    )
+    .get();
+
+  if (!hasSettings) {
+    const schema005 = join(process.cwd(), "schema", "005-settings.sql");
+    if (existsSync(schema005)) {
+      const schema = readFileSync(schema005, "utf-8");
+      sqlite.exec(schema);
+      console.log("Applied 005-settings migration");
+    }
+  }
 }
 
 runMigrations();

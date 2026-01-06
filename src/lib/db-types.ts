@@ -56,8 +56,14 @@ export interface Service {
   created_at: number;
 }
 
+export interface Setting {
+  key: string;
+  value: string;
+}
+
 export interface DB {
   deployments: Deployment;
   projects: Project;
   services: Service;
+  settings: Setting;
 }
