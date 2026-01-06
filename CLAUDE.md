@@ -40,6 +40,11 @@ Update existing install:
 ssh root@65.21.180.49 "/opt/frost/update.sh"
 ```
 
+Dev deploy (push local changes to test VPS):
+```bash
+./dev-deploy.sh
+```
+
 ## Stack
 - Bun + Next.js 16
 - SQLite + Kysely
