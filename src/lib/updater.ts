@@ -1,5 +1,5 @@
 import { exec } from "node:child_process";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { promisify } from "node:util";
 import pkg from "../../package.json";
 import { getSetting, setSetting } from "./auth";
@@ -10,6 +10,8 @@ const REPO_OWNER = "elitan";
 const REPO_NAME = "frost";
 const GITHUB_API = "https://api.github.com";
 const UPDATE_MARKER_PATH = "/opt/frost/data/.update-requested";
+const UPDATE_LOG_PATH = "/opt/frost/data/.update-log";
+const UPDATE_RESULT_PATH = "/opt/frost/data/.update-result";
 const CHECK_INTERVAL_MS = 60 * 60 * 1000;
 
 interface GitHubRelease {
@@ -270,4 +272,42 @@ export async function applyUpdate(): Promise<{
 
 export function isUpdateMarkerPresent(): boolean {
   return existsSync(UPDATE_MARKER_PATH);
+}
+
+export interface UpdateResult {
+  completed: boolean;
+  success: boolean;
+  newVersion: string | null;
+  log: string | null;
+}
+
+export function getUpdateResult(): UpdateResult {
+  if (!existsSync(UPDATE_RESULT_PATH)) {
+    return { completed: false, success: false, newVersion: null, log: null };
+  }
+
+  const resultContent = readFileSync(UPDATE_RESULT_PATH, "utf-8").trim();
+  const log = existsSync(UPDATE_LOG_PATH)
+    ? readFileSync(UPDATE_LOG_PATH, "utf-8")
+    : null;
+
+  if (resultContent === "failed") {
+    return { completed: true, success: false, newVersion: null, log };
+  }
+
+  if (resultContent.startsWith("success:")) {
+    const newVersion = resultContent.replace("success:", "");
+    return { completed: true, success: true, newVersion, log };
+  }
+
+  return { completed: false, success: false, newVersion: null, log: null };
+}
+
+export function clearUpdateResult(): void {
+  if (existsSync(UPDATE_RESULT_PATH)) {
+    unlinkSync(UPDATE_RESULT_PATH);
+  }
+  if (existsSync(UPDATE_LOG_PATH)) {
+    unlinkSync(UPDATE_LOG_PATH);
+  }
 }

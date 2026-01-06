@@ -75,8 +75,8 @@ jobs:
       - name: Generate release notes
         id: notes
         run: |
-          # Get commits since last tag
           last_tag=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          new_version="${{ steps.new.outputs.version }}"
 
           if [ -z "$last_tag" ]; then
             commits=$(git log --pretty=format:"%s" --no-merges)
@@ -84,36 +84,63 @@ jobs:
             commits=$(git log --pretty=format:"%s" --no-merges "$last_tag"..HEAD^)
           fi
 
-          # Group by type
+          breaking=""
           features=""
           fixes=""
-          other=""
+          docs=""
+          refactor=""
+          perf=""
+
+          # Parse commit message, strip type/scope prefix, capitalize
+          parse_msg() {
+            local msg="$1"
+            msg=$(echo "$msg" | sed -E 's/^[a-z]+(\([^)]+\))?!?: //')
+            echo "$(echo "${msg:0:1}" | tr '[:lower:]' '[:upper:]')${msg:1}"
+          }
 
           while IFS= read -r msg; do
             [ -z "$msg" ] && continue
-            if [[ "$msg" =~ ^feat: ]]; then
-              features="$features\n- ${msg#feat: }"
-            elif [[ "$msg" =~ ^fix: ]]; then
-              fixes="$fixes\n- ${msg#fix: }"
-            elif [[ ! "$msg" =~ ^chore: ]]; then
-              other="$other\n- $msg"
+            [[ "$msg" =~ ^chore: ]] && continue
+
+            parsed=$(parse_msg "$msg")
+
+            if [[ "$msg" =~ ^[a-z]+(\([^)]+\))?!: ]] || [[ "$msg" =~ BREAKING ]]; then
+              breaking="$breaking\n- $parsed"
+            elif [[ "$msg" =~ ^feat ]]; then
+              features="$features\n- $parsed"
+            elif [[ "$msg" =~ ^fix ]]; then
+              fixes="$fixes\n- $parsed"
+            elif [[ "$msg" =~ ^docs ]]; then
+              docs="$docs\n- $parsed"
+            elif [[ "$msg" =~ ^refactor ]]; then
+              refactor="$refactor\n- $parsed"
+            elif [[ "$msg" =~ ^perf ]]; then
+              perf="$perf\n- $parsed"
             fi
           done <<< "$commits"
 
           notes=""
-          [ -n "$features" ] && notes="$notes## Features\n$features\n\n"
-          [ -n "$fixes" ] && notes="$notes## Fixes\n$fixes\n\n"
-          [ -n "$other" ] && notes="$notes## Other\n$other\n\n"
 
-          # Check for migrations
+          # Migration warning at top
           if [ -n "$last_tag" ]; then
             schema_changes=$(git diff --name-only "$last_tag" HEAD -- schema/ | wc -l)
             if [ "$schema_changes" -gt 0 ]; then
-              notes="$notes> **Note:** This release includes database migrations.\n\n"
+              notes="> **This release includes database migrations.** Back up your data before updating.\n\n"
             fi
           fi
 
-          # Write to file for multiline output
+          [ -n "$breaking" ] && notes="$notes### Breaking Changes\n$breaking\n\n"
+          [ -n "$features" ] && notes="$notes### Features\n$features\n\n"
+          [ -n "$fixes" ] && notes="$notes### Fixes\n$fixes\n\n"
+          [ -n "$perf" ] && notes="$notes### Performance\n$perf\n\n"
+          [ -n "$refactor" ] && notes="$notes### Refactoring\n$refactor\n\n"
+          [ -n "$docs" ] && notes="$notes### Documentation\n$docs\n\n"
+
+          # Changelog link
+          if [ -n "$last_tag" ]; then
+            notes="$notes---\n**Full changelog:** [$last_tag → v$new_version](https://github.com/elitan/frost/compare/$last_tag...v$new_version)"
+          fi
+
           echo -e "$notes" > release_notes.md
 
       - name: Create release

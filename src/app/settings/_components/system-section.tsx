@@ -222,11 +222,15 @@ export function SystemSection() {
               <CheckCircle2 className="h-5 w-5" />
               <span className="font-medium">Update complete!</span>
             </div>
-            {previousVersion && status?.currentVersion && (
-              <p className="mt-1 text-sm">
-                v{previousVersion} → v{status.currentVersion}
-              </p>
-            )}
+            {previousVersion &&
+              (updateResult?.newVersion || status?.currentVersion) &&
+              previousVersion !==
+                (updateResult?.newVersion || status?.currentVersion) && (
+                <p className="mt-1 text-sm">
+                  v{previousVersion} → v
+                  {updateResult?.newVersion || status?.currentVersion}
+                </p>
+              )}
             {updateResult?.log && (
               <button
                 type="button"
@@ -283,9 +287,24 @@ export function SystemSection() {
                   v{status?.currentVersion || "..."}
                 </p>
               </div>
-              <p className="text-xs text-neutral-500">
-                Last checked: {formatLastCheck(status?.lastCheck ?? null)}
-              </p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-xs text-neutral-500">
+                  Last checked: {formatLastCheck(status?.lastCheck ?? null)}
+                </p>
+                <button
+                  type="button"
+                  onClick={handleCheck}
+                  disabled={checking}
+                  className="text-neutral-500 hover:text-neutral-300 disabled:opacity-50"
+                  title="Check for updates"
+                >
+                  {checking ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3 w-3" />
+                  )}
+                </button>
+              </div>
             </div>
 
             {status?.availableVersion && (

@@ -116,7 +116,7 @@ Types in `src/lib/db-types.ts` are auto-generated. Never modify manually.
 
 Keep messages short (<50 chars title). Body optional for context.
 
-**Releases** - create with commit list as notes:
+**Releases** - use GitHub Actions workflow (bumps package.json, creates tag, generates notes):
 ```bash
-gh release create v0.1.11 --notes "$(git log --oneline v0.1.10..HEAD)"
+gh workflow run release.yml -f version=patch  # or minor, major
 ```
