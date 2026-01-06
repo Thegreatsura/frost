@@ -26,7 +26,7 @@ interface Repo {
 }
 
 interface RepoSelectorProps {
-  onSelect: (repo: { url: string; branch: string; name: string }) => void;
+  onSelect: (repo: { url: string; branch: string; name: string; ownerAvatar: string }) => void;
 }
 
 function formatTimeAgo(dateString: string): string {
@@ -150,7 +150,15 @@ export function RepoSelector({ onSelect }: RepoSelectorProps) {
             onClick={() => setShowOwnerDropdown(!showOwnerDropdown)}
             className="flex h-10 items-center gap-2 rounded-md border border-neutral-700 bg-neutral-800 px-3 text-sm text-neutral-100 hover:bg-neutral-700"
           >
-            <Github className="h-4 w-4" />
+            {selectedOwnerData?.avatar_url ? (
+              <img
+                src={selectedOwnerData.avatar_url}
+                alt={selectedOwnerData.login}
+                className="h-5 w-5 rounded-full"
+              />
+            ) : (
+              <Github className="h-4 w-4" />
+            )}
             <span>{selectedOwnerData?.login || "Select"}</span>
             <ChevronDown className="h-4 w-4 text-neutral-500" />
           </button>
@@ -233,6 +241,7 @@ export function RepoSelector({ onSelect }: RepoSelectorProps) {
                     url: `https://github.com/${repo.full_name}`,
                     branch: repo.default_branch,
                     name: repo.name,
+                    ownerAvatar: repo.owner.avatar_url,
                   })
                 }
               >

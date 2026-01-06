@@ -30,6 +30,7 @@ export default function NewServicePage() {
     url: string;
     branch: string;
     name: string;
+    ownerAvatar?: string;
   } | null>(null);
   const [showManualInput, setShowManualInput] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -186,9 +187,18 @@ export default function NewServicePage() {
                     ) : (
                       <div className="space-y-3">
                         <div className="flex items-center justify-between rounded-lg border border-neutral-700 bg-neutral-800 p-3">
-                          <p className="text-sm font-medium text-neutral-100">
-                            {selectedRepo?.url.replace("https://github.com/", "")}
-                          </p>
+                          <div className="flex items-center gap-3">
+                            {selectedRepo?.ownerAvatar && (
+                              <img
+                                src={selectedRepo.ownerAvatar}
+                                alt=""
+                                className="h-6 w-6 rounded-full"
+                              />
+                            )}
+                            <p className="text-sm font-medium text-neutral-100">
+                              {selectedRepo?.url.replace("https://github.com/", "")}
+                            </p>
+                          </div>
                           <Button
                             type="button"
                             size="sm"
