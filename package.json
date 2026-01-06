@@ -11,7 +11,8 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
-    "db:gen": "node ./node_modules/.bin/kysely-gen --url ./data/frost.db --dialect sqlite --out ./src/lib/db-types.ts"
+    "db:gen": "node ./node_modules/.bin/kysely-gen --url ./data/frost.db --dialect sqlite --out ./src/lib/db-types.ts",
+    "test": "bun test"
   },
   "dependencies": {
     "@radix-ui/react-label": "^2.1.8",
