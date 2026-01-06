@@ -1,6 +1,35 @@
+import https from "node:https";
 import { NextResponse } from "next/server";
 import { getSetting, setSetting } from "@/lib/auth";
 import { lockToDomain } from "@/lib/caddy";
+
+async function checkHttps(
+  domain: string,
+  rejectUnauthorized: boolean,
+): Promise<{ ok: boolean; status?: number; error?: string }> {
+  return new Promise((resolve) => {
+    const req = https.request(
+      {
+        hostname: domain,
+        port: 443,
+        method: "GET",
+        timeout: 5000,
+        rejectUnauthorized,
+      },
+      (res) => {
+        resolve({ ok: true, status: res.statusCode });
+      },
+    );
+    req.on("error", (err) => {
+      resolve({ ok: false, error: err.message });
+    });
+    req.on("timeout", () => {
+      req.destroy();
+      resolve({ ok: false, error: "timeout" });
+    });
+    req.end();
+  });
+}
 
 export async function POST(request: Request) {
   const body = await request.json();
@@ -10,16 +39,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "domain is required" }, { status: 400 });
   }
 
-  try {
-    const res = await fetch(`https://${domain}`, {
-      signal: AbortSignal.timeout(5000),
-    });
+  const staging = (await getSetting("ssl_staging")) === "true";
 
-    if (res.ok || res.status < 500) {
+  try {
+    const result = await checkHttps(domain, !staging);
+
+    if (result.ok && result.status && result.status < 500) {
       await setSetting("ssl_enabled", "true");
 
       const email = await getSetting("email");
-      const staging = (await getSetting("ssl_staging")) === "true";
       if (email) {
         await lockToDomain(domain, email, staging);
       }
@@ -29,7 +57,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       working: false,
-      error: `Server returned ${res.status}`,
+      error: result.error || `Server returned ${result.status}`,
     });
   } catch (error) {
     return NextResponse.json({
