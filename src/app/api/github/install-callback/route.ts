@@ -21,7 +21,9 @@ export async function GET(request: Request) {
       accountLogin: info.accountLogin,
       accountType: info.accountType,
     });
-    return NextResponse.redirect(new URL("/settings/github?success=true", baseUrl));
+    return NextResponse.redirect(
+      new URL("/settings/github?success=true", baseUrl),
+    );
   } catch (err: any) {
     console.error("GitHub install callback error:", err);
     return NextResponse.redirect(

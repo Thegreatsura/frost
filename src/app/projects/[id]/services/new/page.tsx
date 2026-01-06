@@ -147,7 +147,10 @@ export default function NewServicePage() {
                         <RepoSelector
                           onSelect={(repo) => {
                             setSelectedRepo(repo);
-                            if (nameInputRef.current && !nameInputRef.current.value) {
+                            if (
+                              nameInputRef.current &&
+                              !nameInputRef.current.value
+                            ) {
                               nameInputRef.current.value = repo.name;
                             }
                           }}
@@ -165,7 +168,10 @@ export default function NewServicePage() {
                     ) : showManualInput && !selectedRepo ? (
                       <div className="space-y-3">
                         <div className="grid gap-3">
-                          <Label htmlFor="repo_url" className="text-neutral-300">
+                          <Label
+                            htmlFor="repo_url"
+                            className="text-neutral-300"
+                          >
                             Repository URL
                           </Label>
                           <Input
@@ -196,7 +202,10 @@ export default function NewServicePage() {
                               />
                             )}
                             <p className="text-sm font-medium text-neutral-100">
-                              {selectedRepo?.url.replace("https://github.com/", "")}
+                              {selectedRepo?.url.replace(
+                                "https://github.com/",
+                                "",
+                              )}
                             </p>
                           </div>
                           <Button
@@ -208,7 +217,11 @@ export default function NewServicePage() {
                             Change
                           </Button>
                         </div>
-                        <input type="hidden" name="repo_url" value={selectedRepo?.url} />
+                        <input
+                          type="hidden"
+                          name="repo_url"
+                          value={selectedRepo?.url}
+                        />
                       </div>
                     )}
 

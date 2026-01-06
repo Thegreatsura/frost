@@ -1,6 +1,14 @@
 "use client";
 
-import { Building2, CheckCircle2, Github, Loader2, Plus, User, XCircle } from "lucide-react";
+import {
+  Building2,
+  CheckCircle2,
+  Github,
+  Loader2,
+  Plus,
+  User,
+  XCircle,
+} from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -220,7 +228,9 @@ export function GitHubSection() {
               <span className="text-sm">Connected via "{status.appName}"</span>
             </div>
             <div className="space-y-2">
-              <p className="text-xs font-medium text-neutral-500 uppercase">Installations</p>
+              <p className="text-xs font-medium text-neutral-500 uppercase">
+                Installations
+              </p>
               {status.installations.map((installation) => (
                 <div
                   key={installation.id}

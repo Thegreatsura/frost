@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import Database from "better-sqlite3";
 import { Kysely, SqliteDialect } from "kysely";
@@ -43,13 +43,15 @@ function runMigrations() {
   const appliedSet = new Set(applied.map((r) => r.name));
 
   const hasExistingDb = sqlite
-    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='projects'")
+    .prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='projects'",
+    )
     .get();
 
   if (hasExistingDb && appliedSet.size === 0) {
     const now = Date.now();
     const insert = sqlite.prepare(
-      "INSERT INTO _migrations (name, applied_at) VALUES (?, ?)"
+      "INSERT INTO _migrations (name, applied_at) VALUES (?, ?)",
     );
     for (const file of migrationFiles) {
       insert.run(file, now);
@@ -82,7 +84,7 @@ function runMigrations() {
 
   sqlite
     .prepare(
-      "INSERT INTO settings (key, value) VALUES ('frost_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+      "INSERT INTO settings (key, value) VALUES ('frost_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
     )
     .run(pkg.version);
 }

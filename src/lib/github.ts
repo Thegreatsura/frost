@@ -119,7 +119,9 @@ export async function saveInstallation(installation: {
   }
 }
 
-export async function deleteInstallation(installationId: string): Promise<void> {
+export async function deleteInstallation(
+  installationId: string,
+): Promise<void> {
   await db
     .deleteFrom("github_installations")
     .where("installation_id", "=", installationId)
@@ -251,7 +253,9 @@ async function findInstallationId(repoUrl?: string): Promise<string> {
   throw new Error("No GitHub App installation found for this repository");
 }
 
-export async function generateInstallationToken(repoUrl?: string): Promise<string> {
+export async function generateInstallationToken(
+  repoUrl?: string,
+): Promise<string> {
   const creds = await getGitHubAppCredentials();
   if (!creds) {
     throw new Error("GitHub App not configured");
@@ -407,7 +411,10 @@ export async function listInstallationRepos(): Promise<{
       ownerMap.set(repo.owner.login, {
         login: repo.owner.login,
         avatar_url: repo.owner.avatar_url,
-        type: originalRepo?.owner?.type === "Organization" ? "Organization" : "User",
+        type:
+          originalRepo?.owner?.type === "Organization"
+            ? "Organization"
+            : "User",
       });
     }
   }

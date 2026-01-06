@@ -26,7 +26,12 @@ interface Repo {
 }
 
 interface RepoSelectorProps {
-  onSelect: (repo: { url: string; branch: string; name: string; ownerAvatar: string }) => void;
+  onSelect: (repo: {
+    url: string;
+    branch: string;
+    name: string;
+    ownerAvatar: string;
+  }) => void;
 }
 
 function formatTimeAgo(dateString: string): string {

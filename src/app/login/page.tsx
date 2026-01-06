@@ -78,7 +78,8 @@ export default function LoginPage() {
 
               {devPassword && (
                 <p className="text-sm text-neutral-500">
-                  Dev mode password: <code className="text-neutral-400">{devPassword}</code>
+                  Dev mode password:{" "}
+                  <code className="text-neutral-400">{devPassword}</code>
                 </p>
               )}
 

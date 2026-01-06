@@ -62,7 +62,10 @@ export function DomainsSection({
         domain: newDomain,
         type: domainType,
         redirectTarget: domainType === "redirect" ? redirectTarget : undefined,
-        redirectCode: domainType === "redirect" ? (Number(redirectCode) as 301 | 307) : undefined,
+        redirectCode:
+          domainType === "redirect"
+            ? (Number(redirectCode) as 301 | 307)
+            : undefined,
       });
       toast.success("Domain added");
       setNewDomain("");
@@ -165,7 +168,9 @@ export function DomainsSection({
                   onChange={() => setDomainType("proxy")}
                   className="mt-1 h-4 w-4 border-neutral-600 bg-neutral-900 text-white"
                 />
-                <span className="text-sm text-neutral-200">Connect to Service</span>
+                <span className="text-sm text-neutral-200">
+                  Connect to Service
+                </span>
               </label>
 
               <div className="border-t border-neutral-800" />
@@ -178,12 +183,17 @@ export function DomainsSection({
                   onChange={() => setDomainType("redirect")}
                   className="mt-1 h-4 w-4 border-neutral-600 bg-neutral-900 text-white"
                 />
-                <span className="text-sm text-neutral-200">Redirect to Another Domain</span>
+                <span className="text-sm text-neutral-200">
+                  Redirect to Another Domain
+                </span>
               </label>
 
               {domainType === "redirect" && (
                 <div className="ml-7 flex gap-2">
-                  <Select value={redirectCode} onValueChange={(v) => setRedirectCode(v as "301" | "307")}>
+                  <Select
+                    value={redirectCode}
+                    onValueChange={(v) => setRedirectCode(v as "301" | "307")}
+                  >
                     <SelectTrigger className="w-[180px] border-neutral-700 bg-neutral-900 text-neutral-300">
                       <SelectValue />
                     </SelectTrigger>
@@ -193,9 +203,19 @@ export function DomainsSection({
                     </SelectContent>
                   </Select>
 
-                  <Select value={redirectTarget} onValueChange={setRedirectTarget} disabled={proxyDomains.length === 0}>
+                  <Select
+                    value={redirectTarget}
+                    onValueChange={setRedirectTarget}
+                    disabled={proxyDomains.length === 0}
+                  >
                     <SelectTrigger className="flex-1 border-neutral-700 bg-neutral-900 text-neutral-300">
-                      <SelectValue placeholder={proxyDomains.length === 0 ? "No domains available" : "Select domain"} />
+                      <SelectValue
+                        placeholder={
+                          proxyDomains.length === 0
+                            ? "No domains available"
+                            : "Select domain"
+                        }
+                      />
                     </SelectTrigger>
                     <SelectContent className="border-neutral-700 bg-neutral-900">
                       {proxyDomains.map((d) => (

@@ -12,7 +12,9 @@ export async function GET(request: Request) {
   const baseUrl = domain ? `https://${domain}` : url.origin;
 
   if (!code) {
-    return NextResponse.redirect(new URL("/settings/github?error=missing_code", baseUrl));
+    return NextResponse.redirect(
+      new URL("/settings/github?error=missing_code", baseUrl),
+    );
   }
 
   try {

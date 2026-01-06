@@ -25,7 +25,10 @@ export async function POST(request: Request) {
   } else {
     const hash = await getAdminPasswordHash();
     if (!hash) {
-      return NextResponse.json({ error: "setup not complete" }, { status: 503 });
+      return NextResponse.json(
+        { error: "setup not complete" },
+        { status: 503 },
+      );
     }
     valid = await verifyPassword(password, hash);
   }

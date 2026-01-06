@@ -1,7 +1,15 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, Loader2, RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Loader2,
+  RefreshCw,
+  XCircle,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { SettingCard } from "./setting-card";
 
@@ -15,11 +23,24 @@ interface UpdateInfo {
   lastCheck: number | null;
 }
 
+interface UpdateResult {
+  completed: boolean;
+  success: boolean;
+  newVersion: string | null;
+  log: string | null;
+}
+
+type UpdateState = "idle" | "preparing" | "restarting" | "success" | "failed";
+
 export function SystemSection() {
   const [status, setStatus] = useState<UpdateInfo | null>(null);
   const [checking, setChecking] = useState(false);
-  const [applying, setApplying] = useState(false);
+  const [updateState, setUpdateState] = useState<UpdateState>("idle");
+  const [previousVersion, setPreviousVersion] = useState<string | null>(null);
+  const [updateResult, setUpdateResult] = useState<UpdateResult | null>(null);
+  const [showLog, setShowLog] = useState(false);
   const [error, setError] = useState("");
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     fetch("/api/updates")
@@ -27,6 +48,53 @@ export function SystemSection() {
       .then(setStatus)
       .catch(() => setError("Failed to load update status"));
   }, []);
+
+  useEffect(() => {
+    if (updateState !== "restarting") return;
+
+    const startTime = Date.now();
+    const maxDuration = 120000;
+
+    pollingRef.current = setInterval(async () => {
+      if (Date.now() - startTime > maxDuration) {
+        if (pollingRef.current) clearInterval(pollingRef.current);
+        setUpdateState("failed");
+        setError("Server did not respond after 2 minutes");
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/health");
+        if (res.ok) {
+          if (pollingRef.current) clearInterval(pollingRef.current);
+          const resultRes = await fetch("/api/updates/result");
+          const result: UpdateResult = await resultRes.json();
+          setUpdateResult(result);
+
+          if (result.completed && result.success) {
+            setUpdateState("success");
+            const statusRes = await fetch("/api/updates");
+            const newStatus = await statusRes.json();
+            setStatus(newStatus);
+          } else if (result.completed && !result.success) {
+            setUpdateState("failed");
+            setShowLog(true);
+          } else {
+            setUpdateState("success");
+            const statusRes = await fetch("/api/updates");
+            const newStatus = await statusRes.json();
+            setStatus(newStatus);
+          }
+        }
+      } catch {
+        // Server still down, continue polling
+      }
+    }, 2000);
+
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, [updateState]);
 
   async function handleCheck() {
     setChecking(true);
@@ -47,18 +115,30 @@ export function SystemSection() {
       return;
     }
 
-    setApplying(true);
+    setPreviousVersion(status?.currentVersion || null);
+    setUpdateState("preparing");
     setError("");
+    setUpdateResult(null);
+    setShowLog(false);
+
     try {
       const res = await fetch("/api/updates/apply", { method: "POST" });
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || "Failed to apply update");
       }
+      setUpdateState("restarting");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to apply update");
-      setApplying(false);
+      setUpdateState("idle");
     }
+  }
+
+  function handleDismiss() {
+    setUpdateState("idle");
+    setUpdateResult(null);
+    setShowLog(false);
+    setPreviousVersion(null);
   }
 
   function formatLastCheck(timestamp: number | null): string {
@@ -81,6 +161,9 @@ export function SystemSection() {
     });
   }
 
+  const isUpdating =
+    updateState === "preparing" || updateState === "restarting";
+
   return (
     <SettingCard
       title="System"
@@ -88,12 +171,16 @@ export function SystemSection() {
       learnMoreUrl={status?.htmlUrl || undefined}
       learnMoreText="View release notes"
       footer={
-        status?.availableVersion ? (
-          <Button onClick={handleApply} disabled={applying}>
-            {applying ? (
+        updateState === "success" || updateState === "failed" ? (
+          <Button variant="secondary" onClick={handleDismiss}>
+            Dismiss
+          </Button>
+        ) : status?.availableVersion ? (
+          <Button onClick={handleApply} disabled={isUpdating}>
+            {isUpdating ? (
               <>
                 <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                Updating...
+                {updateState === "preparing" ? "Preparing..." : "Restarting..."}
               </>
             ) : (
               "Update Now"
@@ -117,51 +204,127 @@ export function SystemSection() {
       }
     >
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-neutral-400">Current Version</p>
-            <p className="text-lg font-medium text-neutral-100">
-              v{status?.currentVersion || "..."}
-            </p>
-          </div>
-          <p className="text-xs text-neutral-500">
-            Last checked: {formatLastCheck(status?.lastCheck ?? null)}
-          </p>
-        </div>
-
-        {status?.availableVersion && (
-          <div className="rounded-lg border border-blue-800 bg-blue-900/20 p-4">
-            <div className="flex items-center justify-between">
-              <p className="font-medium text-blue-400">
-                Update Available: v{status.availableVersion}
+        {updateState === "restarting" && (
+          <div className="flex items-center gap-2 rounded-md bg-blue-900/20 p-3 text-blue-400">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            <div>
+              <span>Server restarting...</span>
+              <p className="text-xs text-neutral-400">
+                This may take up to 2 minutes.
               </p>
-              {status.publishedAt && (
-                <p className="text-xs text-neutral-400">
-                  Released {formatPublishedAt(status.publishedAt)}
-                </p>
-              )}
             </div>
+          </div>
+        )}
 
-            {status.hasMigrations && (
-              <div className="mt-3 flex items-start gap-2 rounded bg-yellow-900/30 p-2 text-yellow-400">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                <p className="text-xs">
-                  This update includes database migrations. Back up your data
-                  before updating.
-                </p>
-              </div>
+        {updateState === "success" && (
+          <div className="rounded-md bg-green-900/20 p-3 text-green-400">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5" />
+              <span className="font-medium">Update complete!</span>
+            </div>
+            {previousVersion && status?.currentVersion && (
+              <p className="mt-1 text-sm">
+                v{previousVersion} → v{status.currentVersion}
+              </p>
+            )}
+            {updateResult?.log && (
+              <button
+                type="button"
+                onClick={() => setShowLog(!showLog)}
+                className="mt-2 flex items-center gap-1 text-xs text-neutral-400 hover:text-neutral-300"
+              >
+                {showLog ? (
+                  <ChevronDown className="h-3 w-3" />
+                ) : (
+                  <ChevronRight className="h-3 w-3" />
+                )}
+                View update log
+              </button>
             )}
           </div>
         )}
 
-        {status && !status.availableVersion && (
-          <div className="flex items-center gap-2 text-green-400">
-            <CheckCircle2 className="h-4 w-4" />
-            <span className="text-sm">You're running the latest version</span>
+        {updateState === "failed" && (
+          <div className="rounded-md bg-red-900/20 p-3 text-red-400">
+            <div className="flex items-center gap-2">
+              <XCircle className="h-5 w-5" />
+              <span className="font-medium">Update failed</span>
+            </div>
+            {error && <p className="mt-1 text-sm">{error}</p>}
+            {updateResult?.log && (
+              <button
+                type="button"
+                onClick={() => setShowLog(!showLog)}
+                className="mt-2 flex items-center gap-1 text-xs text-neutral-400 hover:text-neutral-300"
+              >
+                {showLog ? (
+                  <ChevronDown className="h-3 w-3" />
+                ) : (
+                  <ChevronRight className="h-3 w-3" />
+                )}
+                View update log
+              </button>
+            )}
           </div>
         )}
 
-        {error && <p className="text-sm text-red-400">{error}</p>}
+        {showLog && updateResult?.log && (
+          <pre className="max-h-64 overflow-auto rounded bg-neutral-900 p-3 text-xs text-neutral-300">
+            {updateResult.log}
+          </pre>
+        )}
+
+        {updateState === "idle" && (
+          <>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-neutral-400">Current Version</p>
+                <p className="text-lg font-medium text-neutral-100">
+                  v{status?.currentVersion || "..."}
+                </p>
+              </div>
+              <p className="text-xs text-neutral-500">
+                Last checked: {formatLastCheck(status?.lastCheck ?? null)}
+              </p>
+            </div>
+
+            {status?.availableVersion && (
+              <div className="rounded-lg border border-blue-800 bg-blue-900/20 p-4">
+                <div className="flex items-center justify-between">
+                  <p className="font-medium text-blue-400">
+                    Update Available: v{status.availableVersion}
+                  </p>
+                  {status.publishedAt && (
+                    <p className="text-xs text-neutral-400">
+                      Released {formatPublishedAt(status.publishedAt)}
+                    </p>
+                  )}
+                </div>
+
+                {status.hasMigrations && (
+                  <div className="mt-3 flex items-start gap-2 rounded bg-yellow-900/30 p-2 text-yellow-400">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <p className="text-xs">
+                      This update includes database migrations. Back up your
+                      data before updating.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {status && !status.availableVersion && (
+              <div className="flex items-center gap-2 text-green-400">
+                <CheckCircle2 className="h-4 w-4" />
+                <span className="text-sm">
+                  You're running the latest version
+                </span>
+              </div>
+            )}
+
+            {error && <p className="text-sm text-red-400">{error}</p>}
+          </>
+        )}
       </div>
     </SettingCard>
   );

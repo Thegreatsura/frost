@@ -9,7 +9,8 @@ export async function GET() {
   const installations = await getInstallations();
 
   const hasDomain = domain && sslEnabled === "true";
-  const hasInstallation = installations.length > 0 || creds?.installationId !== null;
+  const hasInstallation =
+    installations.length > 0 || creds?.installationId !== null;
 
   return NextResponse.json({
     hasDomain,

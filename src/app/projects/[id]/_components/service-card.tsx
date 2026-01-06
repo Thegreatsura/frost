@@ -91,13 +91,15 @@ export function ServiceCard({
         </CardHeader>
         <CardContent className="space-y-2">
           <div className="flex items-center gap-2">
-            {service.deploy_type === "repo" && service.repo_url && getGitHubOwnerFromUrl(service.repo_url) && (
-              <img
-                src={`https://github.com/${getGitHubOwnerFromUrl(service.repo_url)}.png?size=40`}
-                alt=""
-                className="h-5 w-5 rounded-full"
-              />
-            )}
+            {service.deploy_type === "repo" &&
+              service.repo_url &&
+              getGitHubOwnerFromUrl(service.repo_url) && (
+                <img
+                  src={`https://github.com/${getGitHubOwnerFromUrl(service.repo_url)}.png?size=40`}
+                  alt=""
+                  className="h-5 w-5 rounded-full"
+                />
+              )}
             <p className="truncate font-mono text-xs text-neutral-500">
               {service.deploy_type === "image"
                 ? service.image_url
