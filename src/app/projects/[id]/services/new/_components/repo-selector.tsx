@@ -57,22 +57,17 @@ export function RepoSelector({ onSelect }: RepoSelectorProps) {
   useEffect(() => {
     async function fetchRepos() {
       try {
-        const statusRes = await fetch("/api/settings/github");
-        const statusData = await statusRes.json();
-
-        if (!statusData.connected || !statusData.installed) {
-          setConnected(false);
-          setLoading(false);
-          return;
-        }
-
-        setConnected(true);
         const res = await fetch("/api/github/repos");
         if (!res.ok) {
           const data = await res.json();
+          if (res.status === 400 && data.error === "GitHub App not connected") {
+            setConnected(false);
+            return;
+          }
           throw new Error(data.error || "Failed to fetch repos");
         }
 
+        setConnected(true);
         const data = await res.json();
         setOwners(data.owners);
         setRepos(data.repos);

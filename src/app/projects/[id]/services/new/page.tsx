@@ -186,14 +186,9 @@ export default function NewServicePage() {
                     ) : (
                       <div className="space-y-3">
                         <div className="flex items-center justify-between rounded-lg border border-neutral-700 bg-neutral-800 p-3">
-                          <div>
-                            <p className="text-sm font-medium text-neutral-100">
-                              {selectedRepo?.url.replace("https://github.com/", "")}
-                            </p>
-                            <p className="text-xs text-neutral-500">
-                              Branch: {selectedRepo?.branch}
-                            </p>
-                          </div>
+                          <p className="text-sm font-medium text-neutral-100">
+                            {selectedRepo?.url.replace("https://github.com/", "")}
+                          </p>
                           <Button
                             type="button"
                             size="sm"
