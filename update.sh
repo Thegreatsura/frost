@@ -8,6 +8,8 @@ NC='\033[0m'
 
 FROST_DIR="/opt/frost"
 UPDATE_MARKER="$FROST_DIR/data/.update-requested"
+UPDATE_LOG="$FROST_DIR/data/.update-log"
+UPDATE_RESULT="$FROST_DIR/data/.update-result"
 BACKUP_DIR="$FROST_DIR/.backup"
 PRE_START=false
 
@@ -29,6 +31,7 @@ success() {
 
 cleanup_on_failure() {
   error "Update failed!"
+  echo "failed" > "$UPDATE_RESULT"
 
   if [ -d "$BACKUP_DIR/.next" ]; then
     log "Restoring previous build..."
@@ -61,6 +64,9 @@ if [ ! -d "$FROST_DIR" ]; then
   echo "Run install.sh first"
   exit 1
 fi
+
+> "$UPDATE_LOG"
+exec > >(tee -a "$UPDATE_LOG") 2>&1
 
 if [ -f "$UPDATE_MARKER" ]; then
   rm "$UPDATE_MARKER"
@@ -115,7 +121,14 @@ NODE_ENV=development npm install --legacy-peer-deps --silent 2>&1
 log "Building..."
 npm run build 2>&1
 
+log "Running migrations..."
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+bun run migrate 2>&1
+
 rm -rf "$BACKUP_DIR"
+
+echo "success:$NEW_VERSION" > "$UPDATE_RESULT"
 
 if [ "$PRE_START" = false ]; then
   log "Starting Frost..."

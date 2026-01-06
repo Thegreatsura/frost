@@ -143,6 +143,9 @@ NODE_ENV=development npm install --legacy-peer-deps --silent
 echo "Building..."
 npm run build
 
+echo "Running migrations..."
+bun run migrate
+
 # Run setup to set admin password (uses bun:sqlite)
 echo "Setting admin password..."
 bun run setup "$FROST_PASSWORD" || {
