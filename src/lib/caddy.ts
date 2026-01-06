@@ -91,7 +91,10 @@ export async function configureDomain(
   }
 }
 
-export async function lockToDomain(domain: string): Promise<void> {
+export async function lockToDomain(
+  domain: string,
+  email: string,
+): Promise<void> {
   const config = {
     apps: {
       http: {
@@ -138,6 +141,16 @@ export async function lockToDomain(domain: string): Promise<void> {
               },
             ],
           },
+        },
+      },
+      tls: {
+        automation: {
+          policies: [
+            {
+              subjects: [domain],
+              issuers: [{ module: "acme", email }],
+            },
+          ],
         },
       },
     },

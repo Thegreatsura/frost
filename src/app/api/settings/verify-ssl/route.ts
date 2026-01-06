@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { setSetting } from "@/lib/auth";
+import { getSetting, setSetting } from "@/lib/auth";
+import { lockToDomain } from "@/lib/caddy";
 
 export async function POST(request: Request) {
   const body = await request.json();
@@ -16,6 +17,12 @@ export async function POST(request: Request) {
 
     if (res.ok || res.status < 500) {
       await setSetting("ssl_enabled", "true");
+
+      const email = await getSetting("email");
+      if (email) {
+        await lockToDomain(domain, email);
+      }
+
       return NextResponse.json({ working: true });
     }
 
