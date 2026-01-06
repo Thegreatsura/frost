@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import Database from "better-sqlite3";
 import { Kysely, SqliteDialect } from "kysely";
@@ -20,110 +20,69 @@ export const db = new Kysely<DB>({
 });
 
 function runMigrations() {
-  const schema001 = join(process.cwd(), "schema", "001-init.sql");
-  if (!existsSync(schema001)) {
+  const schemaDir = join(process.cwd(), "schema");
+  if (!existsSync(schemaDir)) {
     return;
   }
 
-  const hasProjects = sqlite
-    .prepare(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='projects'",
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS _migrations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      applied_at INTEGER NOT NULL
     )
-    .get();
+  `);
 
-  if (!hasProjects) {
-    const schema = readFileSync(schema001, "utf-8");
-    sqlite.exec(schema);
-    console.log("Applied 001-init migration");
-  }
+  const migrationFiles = readdirSync(schemaDir)
+    .filter((f) => f.endsWith(".sql"))
+    .sort();
 
-  const hasServices = sqlite
-    .prepare(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='services'",
-    )
-    .get();
-
-  if (hasServices) {
-    return;
-  }
-
-  const columns = sqlite.prepare("PRAGMA table_info(projects)").all() as Array<{
-    name: string;
-  }>;
-  const columnNames = columns.map((c) => c.name);
-
-  if (!columnNames.includes("env_vars")) {
-    const schema002 = join(process.cwd(), "schema", "002-env-vars.sql");
-    if (existsSync(schema002)) {
-      const schema = readFileSync(schema002, "utf-8");
-      sqlite.exec(schema);
-      console.log("Applied 002-env-vars migration");
-    }
-  }
-
-  if (!columnNames.includes("deploy_type")) {
-    const schema003 = join(process.cwd(), "schema", "003-image-deploy.sql");
-    if (existsSync(schema003)) {
-      const schema = readFileSync(schema003, "utf-8");
-      sqlite.exec(schema);
-      console.log("Applied 003-image-deploy migration");
-    }
-  }
-
-  const schema004 = join(process.cwd(), "schema", "004-multi-container.sql");
-  if (existsSync(schema004)) {
-    const schema = readFileSync(schema004, "utf-8");
-    sqlite.exec(schema);
-    console.log("Applied 004-multi-container migration");
-  }
-
-  const hasSettings = sqlite
-    .prepare(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='settings'",
-    )
-    .get();
-
-  if (!hasSettings) {
-    const schema005 = join(process.cwd(), "schema", "005-settings.sql");
-    if (existsSync(schema005)) {
-      const schema = readFileSync(schema005, "utf-8");
-      sqlite.exec(schema);
-      console.log("Applied 005-settings migration");
-    }
-  }
-
-  const serviceColumns = sqlite
-    .prepare("PRAGMA table_info(services)")
+  const applied = sqlite
+    .prepare("SELECT name FROM _migrations")
     .all() as Array<{ name: string }>;
-  const serviceColumnNames = serviceColumns.map((c) => c.name);
+  const appliedSet = new Set(applied.map((r) => r.name));
 
-  if (serviceColumnNames.includes("port")) {
-    const schema006 = join(process.cwd(), "schema", "006-remove-port.sql");
-    if (existsSync(schema006)) {
-      const schema = readFileSync(schema006, "utf-8");
-      sqlite.exec(schema);
-      console.log("Applied 006-remove-port migration");
-    }
-  }
-
-  const hasDomains = sqlite
-    .prepare(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='domains'",
-    )
+  const hasExistingDb = sqlite
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='projects'")
     .get();
 
-  if (!hasDomains) {
-    const schema007 = join(process.cwd(), "schema", "007-domains.sql");
-    if (existsSync(schema007)) {
-      const schema = readFileSync(schema007, "utf-8");
-      sqlite.exec(schema);
-      console.log("Applied 007-domains migration");
+  if (hasExistingDb && appliedSet.size === 0) {
+    const now = Date.now();
+    const insert = sqlite.prepare(
+      "INSERT INTO _migrations (name, applied_at) VALUES (?, ?)"
+    );
+    for (const file of migrationFiles) {
+      insert.run(file, now);
+    }
+    console.log(`Bootstrapped ${migrationFiles.length} existing migrations`);
+    return;
+  }
+
+  for (const file of migrationFiles) {
+    if (appliedSet.has(file)) {
+      continue;
+    }
+
+    const filePath = join(schemaDir, file);
+    const sql = readFileSync(filePath, "utf-8");
+
+    sqlite.exec("BEGIN TRANSACTION");
+    try {
+      sqlite.exec(sql);
+      sqlite
+        .prepare("INSERT INTO _migrations (name, applied_at) VALUES (?, ?)")
+        .run(file, Date.now());
+      sqlite.exec("COMMIT");
+      console.log(`Applied migration: ${file}`);
+    } catch (err) {
+      sqlite.exec("ROLLBACK");
+      throw err;
     }
   }
 
   sqlite
     .prepare(
-      "INSERT INTO settings (key, value) VALUES ('frost_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+      "INSERT INTO settings (key, value) VALUES ('frost_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
     )
     .run(pkg.version);
 }
