@@ -2,7 +2,7 @@
 
 import { Loader2 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { BreadcrumbHeader } from "@/components/breadcrumb-header";
 import { EnvVarEditor } from "@/components/env-var-editor";
@@ -14,6 +14,7 @@ import { Separator } from "@/components/ui/separator";
 import { useProject } from "@/hooks/use-projects";
 import { useCreateService } from "@/hooks/use-services";
 import type { CreateServiceInput, EnvVar } from "@/lib/api";
+import { RepoSelector } from "./_components/repo-selector";
 
 type DeployType = "repo" | "image";
 
@@ -25,6 +26,13 @@ export default function NewServicePage() {
   const createMutation = useCreateService(projectId);
   const [deployType, setDeployType] = useState<DeployType>("repo");
   const [envVars, setEnvVars] = useState<EnvVar[]>([]);
+  const [selectedRepo, setSelectedRepo] = useState<{
+    url: string;
+    branch: string;
+    name: string;
+  } | null>(null);
+  const [showManualInput, setShowManualInput] = useState(false);
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -79,6 +87,7 @@ export default function NewServicePage() {
                       Name
                     </Label>
                     <Input
+                      ref={nameInputRef}
                       id="name"
                       name="name"
                       required
@@ -129,52 +138,108 @@ export default function NewServicePage() {
                 {deployType === "repo" ? (
                   <div className="space-y-4">
                     <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">
-                      Repository Settings
+                      Import Git Repository
                     </p>
 
-                    <div className="grid gap-3">
-                      <Label htmlFor="repo_url" className="text-neutral-300">
-                        Repository URL
-                      </Label>
-                      <Input
-                        id="repo_url"
-                        name="repo_url"
-                        required
-                        placeholder="https://github.com/user/repo"
-                        className="border-neutral-700 bg-neutral-800 font-mono text-sm text-neutral-100 placeholder:text-neutral-500"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="grid gap-3">
-                        <Label htmlFor="branch" className="text-neutral-300">
-                          Branch
-                        </Label>
-                        <Input
-                          id="branch"
-                          name="branch"
-                          placeholder="main"
-                          defaultValue="main"
-                          className="border-neutral-700 bg-neutral-800 font-mono text-sm text-neutral-100 placeholder:text-neutral-500"
+                    {!selectedRepo && !showManualInput ? (
+                      <>
+                        <RepoSelector
+                          onSelect={(repo) => {
+                            setSelectedRepo(repo);
+                            if (nameInputRef.current && !nameInputRef.current.value) {
+                              nameInputRef.current.value = repo.name;
+                            }
+                          }}
                         />
-                      </div>
-
-                      <div className="grid gap-3">
-                        <Label
-                          htmlFor="dockerfile_path"
-                          className="text-neutral-300"
+                        <div className="text-center">
+                          <button
+                            type="button"
+                            onClick={() => setShowManualInput(true)}
+                            className="text-xs text-neutral-500 hover:text-neutral-300"
+                          >
+                            Or enter a public repository URL manually
+                          </button>
+                        </div>
+                      </>
+                    ) : showManualInput && !selectedRepo ? (
+                      <div className="space-y-3">
+                        <div className="grid gap-3">
+                          <Label htmlFor="repo_url" className="text-neutral-300">
+                            Repository URL
+                          </Label>
+                          <Input
+                            id="repo_url"
+                            name="repo_url"
+                            required
+                            placeholder="https://github.com/user/repo"
+                            className="border-neutral-700 bg-neutral-800 font-mono text-sm text-neutral-100 placeholder:text-neutral-500"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowManualInput(false)}
+                          className="text-xs text-neutral-500 hover:text-neutral-300"
                         >
-                          Dockerfile
-                        </Label>
-                        <Input
-                          id="dockerfile_path"
-                          name="dockerfile_path"
-                          placeholder="Dockerfile"
-                          defaultValue="Dockerfile"
-                          className="border-neutral-700 bg-neutral-800 font-mono text-sm text-neutral-100 placeholder:text-neutral-500"
-                        />
+                          ← Back to repository list
+                        </button>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between rounded-lg border border-neutral-700 bg-neutral-800 p-3">
+                          <div>
+                            <p className="text-sm font-medium text-neutral-100">
+                              {selectedRepo?.url.replace("https://github.com/", "")}
+                            </p>
+                            <p className="text-xs text-neutral-500">
+                              Branch: {selectedRepo?.branch}
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setSelectedRepo(null)}
+                          >
+                            Change
+                          </Button>
+                        </div>
+                        <input type="hidden" name="repo_url" value={selectedRepo?.url} />
+                      </div>
+                    )}
+
+                    {(selectedRepo || showManualInput) && (
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-3">
+                          <Label htmlFor="branch" className="text-neutral-300">
+                            Branch
+                          </Label>
+                          <Input
+                            id="branch"
+                            name="branch"
+                            placeholder="main"
+                            defaultValue={selectedRepo?.branch || "main"}
+                            key={selectedRepo?.branch}
+                            className="border-neutral-700 bg-neutral-800 font-mono text-sm text-neutral-100 placeholder:text-neutral-500"
+                          />
+                        </div>
+
+                        <div className="grid gap-3">
+                          <Label
+                            htmlFor="dockerfile_path"
+                            className="text-neutral-300"
+                          >
+                            Dockerfile
+                          </Label>
+                          <Input
+                            id="dockerfile_path"
+                            name="dockerfile_path"
+                            placeholder="Dockerfile"
+                            defaultValue="Dockerfile"
+                            className="border-neutral-700 bg-neutral-800 font-mono text-sm text-neutral-100 placeholder:text-neutral-500"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-4">

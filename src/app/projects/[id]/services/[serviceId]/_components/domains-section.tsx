@@ -7,6 +7,7 @@ import {
   Globe,
   Loader2,
   Plus,
+  Search,
   Trash2,
   XCircle,
 } from "lucide-react";
@@ -16,7 +17,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   useAddDomain,
   useDeleteDomain,
@@ -43,6 +50,9 @@ export function DomainsSection({
   const [newDomain, setNewDomain] = useState("");
   const [domainType, setDomainType] = useState<"proxy" | "redirect">("proxy");
   const [redirectTarget, setRedirectTarget] = useState("");
+  const [redirectCode, setRedirectCode] = useState<"301" | "307">("301");
+
+  const proxyDomains = domains?.filter((d) => d.type === "proxy") || [];
 
   async function handleAddDomain() {
     if (!newDomain) return;
@@ -52,10 +62,12 @@ export function DomainsSection({
         domain: newDomain,
         type: domainType,
         redirectTarget: domainType === "redirect" ? redirectTarget : undefined,
+        redirectCode: domainType === "redirect" ? (Number(redirectCode) as 301 | 307) : undefined,
       });
       toast.success("Domain added");
       setNewDomain("");
       setRedirectTarget("");
+      setRedirectCode("301");
       setDomainType("proxy");
       setShowAddForm(false);
     } catch (err: any) {
@@ -128,65 +140,90 @@ export function DomainsSection({
         )}
 
         {showAddForm && (
-          <div className="mb-4 space-y-4 rounded-md border border-neutral-800 p-4">
-            <div className="grid gap-2">
-              <Label className="text-sm text-neutral-400">Domain</Label>
+          <div className="mb-4 rounded-md border border-neutral-800 p-4">
+            <h3 className="text-lg font-medium text-white">Add Domain</h3>
+            <p className="mt-1 text-sm text-neutral-400">
+              Add a domain to connect it to this service.
+            </p>
+
+            <div className="mt-4 relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" />
               <Input
                 value={newDomain}
                 onChange={(e) => setNewDomain(e.target.value)}
-                placeholder="app.example.com"
-                className="h-9 border-neutral-800 bg-neutral-950 text-white placeholder:text-neutral-600"
+                placeholder="example.com"
+                className="h-10 pl-9 border-neutral-700 bg-neutral-900 text-white placeholder:text-neutral-500"
               />
             </div>
 
-            <div className="grid gap-2">
-              <Label className="text-sm text-neutral-400">Type</Label>
-              <div className="flex gap-2">
-                <Button
-                  variant={domainType === "proxy" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setDomainType("proxy")}
-                  className={
-                    domainType === "proxy"
-                      ? ""
-                      : "border-neutral-700 text-neutral-400"
-                  }
-                >
-                  Proxy
-                </Button>
-                <Button
-                  variant={domainType === "redirect" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setDomainType("redirect")}
-                  className={
-                    domainType === "redirect"
-                      ? ""
-                      : "border-neutral-700 text-neutral-400"
-                  }
-                >
-                  Redirect
-                </Button>
-              </div>
+            <div className="mt-4 space-y-3 rounded-md border border-neutral-800 p-4">
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="radio"
+                  name="domainType"
+                  checked={domainType === "proxy"}
+                  onChange={() => setDomainType("proxy")}
+                  className="mt-1 h-4 w-4 border-neutral-600 bg-neutral-900 text-white"
+                />
+                <span className="text-sm text-neutral-200">Connect to Service</span>
+              </label>
+
+              <div className="border-t border-neutral-800" />
+
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="radio"
+                  name="domainType"
+                  checked={domainType === "redirect"}
+                  onChange={() => setDomainType("redirect")}
+                  className="mt-1 h-4 w-4 border-neutral-600 bg-neutral-900 text-white"
+                />
+                <span className="text-sm text-neutral-200">Redirect to Another Domain</span>
+              </label>
+
+              {domainType === "redirect" && (
+                <div className="ml-7 flex gap-2">
+                  <Select value={redirectCode} onValueChange={(v) => setRedirectCode(v as "301" | "307")}>
+                    <SelectTrigger className="w-[180px] border-neutral-700 bg-neutral-900 text-neutral-300">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="border-neutral-700 bg-neutral-900">
+                      <SelectItem value="301">301 Permanent</SelectItem>
+                      <SelectItem value="307">307 Temporary</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Select value={redirectTarget} onValueChange={setRedirectTarget} disabled={proxyDomains.length === 0}>
+                    <SelectTrigger className="flex-1 border-neutral-700 bg-neutral-900 text-neutral-300">
+                      <SelectValue placeholder={proxyDomains.length === 0 ? "No domains available" : "Select domain"} />
+                    </SelectTrigger>
+                    <SelectContent className="border-neutral-700 bg-neutral-900">
+                      {proxyDomains.map((d) => (
+                        <SelectItem key={d.id} value={d.domain}>
+                          {d.domain}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
 
-            {domainType === "redirect" && (
-              <div className="grid gap-2">
-                <Label className="text-sm text-neutral-400">
-                  Redirect to domain
-                </Label>
-                <Input
-                  value={redirectTarget}
-                  onChange={(e) => setRedirectTarget(e.target.value)}
-                  placeholder="example.com"
-                  className="h-9 border-neutral-800 bg-neutral-950 text-white placeholder:text-neutral-600"
-                />
-                <p className="text-xs text-neutral-500">
-                  Visitors will be redirected (301) to this domain
-                </p>
-              </div>
-            )}
-
-            <div className="flex gap-2">
+            <div className="mt-4 flex items-center justify-between">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setShowAddForm(false);
+                  setNewDomain("");
+                  setRedirectTarget("");
+                  setRedirectCode("301");
+                  setDomainType("proxy");
+                }}
+                className="border-neutral-700 text-neutral-300"
+              >
+                Cancel
+              </Button>
               <Button
                 size="sm"
                 onClick={handleAddDomain}
@@ -199,19 +236,7 @@ export function DomainsSection({
                 {addMutation.isPending ? (
                   <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                 ) : null}
-                Add Domain
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setShowAddForm(false);
-                  setNewDomain("");
-                  setRedirectTarget("");
-                  setDomainType("proxy");
-                }}
-              >
-                Cancel
+                Save
               </Button>
             </div>
           </div>
@@ -309,7 +334,7 @@ function DomainRow({
                 variant="outline"
                 className="border-neutral-700 text-neutral-400"
               >
-                301 redirect
+                {domain.redirect_code || 301} redirect
               </Badge>
             )}
             {isActive && (

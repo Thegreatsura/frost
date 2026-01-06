@@ -1,11 +1,17 @@
 "use client";
 
-import { CheckCircle2, Github, Loader2, XCircle } from "lucide-react";
+import { Building2, CheckCircle2, Github, Loader2, Plus, User, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { SettingCard } from "./setting-card";
+
+interface GitHubInstallation {
+  id: string;
+  accountLogin: string;
+  accountType: string;
+}
 
 interface GitHubStatus {
   hasDomain: boolean;
@@ -14,6 +20,7 @@ interface GitHubStatus {
   installed: boolean;
   appName: string | null;
   appSlug: string | null;
+  installations: GitHubInstallation[];
 }
 
 export function GitHubSection() {
@@ -207,23 +214,48 @@ export function GitHubSection() {
         )}
 
         {status?.connected && status?.installed && (
-          <div className="flex items-start gap-3 rounded-md bg-green-900/20 p-4 text-green-400">
-            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
-            <div>
-              <p className="font-medium">Connected</p>
-              <p className="mt-1 text-sm text-green-300">
-                GitHub App "{status.appName}" is installed and ready. You can
-                now deploy from private repositories.
-              </p>
-              <a
-                href={`https://github.com/apps/${status.appSlug}/installations/new`}
-                className="mt-2 inline-block text-sm underline hover:text-green-200"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Manage repositories →
-              </a>
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-green-400">
+              <CheckCircle2 className="h-4 w-4" />
+              <span className="text-sm">Connected via "{status.appName}"</span>
             </div>
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-neutral-500 uppercase">Installations</p>
+              {status.installations.map((installation) => (
+                <div
+                  key={installation.id}
+                  className="flex items-center justify-between rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2"
+                >
+                  <div className="flex items-center gap-2">
+                    {installation.accountType === "Organization" ? (
+                      <Building2 className="h-4 w-4 text-neutral-400" />
+                    ) : (
+                      <User className="h-4 w-4 text-neutral-400" />
+                    )}
+                    <span className="text-sm text-neutral-200">
+                      {installation.accountLogin}
+                    </span>
+                    <span className="text-xs text-neutral-500">
+                      {installation.accountType}
+                    </span>
+                  </div>
+                </div>
+              ))}
+              {status.installations.length === 0 && (
+                <p className="text-sm text-neutral-500">
+                  No installations found. Click below to install.
+                </p>
+              )}
+            </div>
+            <a
+              href={`https://github.com/apps/${status.appSlug}/installations/new`}
+              className="inline-flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add another account or organization
+            </a>
           </div>
         )}
       </div>

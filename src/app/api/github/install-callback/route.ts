@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSetting } from "@/lib/auth";
-import { saveInstallationId } from "@/lib/github";
+import { fetchInstallationInfo, saveInstallation } from "@/lib/github";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -15,7 +15,12 @@ export async function GET(request: Request) {
   }
 
   try {
-    await saveInstallationId(installationId);
+    const info = await fetchInstallationInfo(installationId);
+    await saveInstallation({
+      installationId,
+      accountLogin: info.accountLogin,
+      accountType: info.accountType,
+    });
     return NextResponse.redirect(new URL("/settings/github?success=true", baseUrl));
   } catch (err: any) {
     console.error("GitHub install callback error:", err);

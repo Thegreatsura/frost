@@ -20,6 +20,12 @@ export type JsonObject = { [key: string]: JsonValue };
 
 export type JsonValue = JsonPrimitive | JsonObject | JsonArray;
 
+export interface Migration {
+  id: Generated<number>;
+  name: string;
+  applied_at: number;
+}
+
 export interface Deployment {
   id: string;
   project_id: string;
@@ -33,6 +39,26 @@ export interface Deployment {
   error_message: string | null;
   created_at: number;
   finished_at: number | null;
+}
+
+export interface Domain {
+  id: string;
+  service_id: string;
+  domain: string;
+  'type': Generated<string>;
+  redirect_target: string | null;
+  redirect_code: Generated<number | null>;
+  dns_verified: Generated<number | null>;
+  ssl_status: Generated<string | null>;
+  created_at: number;
+}
+
+export interface GithubInstallation {
+  id: string;
+  installation_id: string;
+  account_login: string;
+  account_type: Generated<string>;
+  created_at: number;
 }
 
 export interface Project {
@@ -60,21 +86,11 @@ export interface Setting {
   value: string;
 }
 
-export interface Domain {
-  id: string;
-  service_id: string;
-  domain: string;
-  type: Generated<string>;
-  redirect_target: string | null;
-  redirect_code: Generated<number | null>;
-  dns_verified: Generated<number>;
-  ssl_status: Generated<string>;
-  created_at: number;
-}
-
 export interface DB {
+  _migrations: Migration;
   deployments: Deployment;
   domains: Domain;
+  github_installations: GithubInstallation;
   projects: Project;
   services: Service;
   settings: Setting;

@@ -198,7 +198,7 @@ async function runServiceDeployment(
       let cloneUrl = service.repo_url;
       if (isGitHubRepo(service.repo_url) && (await hasGitHubApp())) {
         try {
-          const token = await generateInstallationToken();
+          const token = await generateInstallationToken(service.repo_url);
           cloneUrl = injectTokenIntoUrl(service.repo_url, token);
           await appendLog(
             deploymentId,

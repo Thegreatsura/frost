@@ -1,7 +1,16 @@
-import { createPrivateKey, createSign } from "node:crypto";
+import { createPrivateKey, createSign, randomUUID } from "node:crypto";
 import { getSetting, setSetting } from "./auth";
+import { db } from "./db";
 
 const GITHUB_API = "https://api.github.com";
+
+export interface GitHubInstallation {
+  id: string;
+  installation_id: string;
+  account_login: string;
+  account_type: string;
+  created_at: number;
+}
 
 export interface GitHubAppCredentials {
   appId: string;
@@ -51,7 +60,70 @@ export async function getGitHubAppCredentials(): Promise<GitHubAppCredentials | 
 
 export async function hasGitHubApp(): Promise<boolean> {
   const creds = await getGitHubAppCredentials();
-  return creds !== null && creds.installationId !== null;
+  if (!creds) return false;
+  const installations = await getInstallations();
+  return installations.length > 0 || creds.installationId !== null;
+}
+
+export async function getInstallations(): Promise<GitHubInstallation[]> {
+  const rows = await db
+    .selectFrom("github_installations")
+    .selectAll()
+    .orderBy("created_at", "desc")
+    .execute();
+  return rows;
+}
+
+export async function getInstallationByAccount(
+  accountLogin: string,
+): Promise<GitHubInstallation | null> {
+  const row = await db
+    .selectFrom("github_installations")
+    .selectAll()
+    .where("account_login", "=", accountLogin)
+    .executeTakeFirst();
+  return row ?? null;
+}
+
+export async function saveInstallation(installation: {
+  installationId: string;
+  accountLogin: string;
+  accountType: string;
+}): Promise<void> {
+  const existing = await db
+    .selectFrom("github_installations")
+    .selectAll()
+    .where("installation_id", "=", installation.installationId)
+    .executeTakeFirst();
+
+  if (existing) {
+    await db
+      .updateTable("github_installations")
+      .set({
+        account_login: installation.accountLogin,
+        account_type: installation.accountType,
+      })
+      .where("installation_id", "=", installation.installationId)
+      .execute();
+  } else {
+    await db
+      .insertInto("github_installations")
+      .values({
+        id: randomUUID(),
+        installation_id: installation.installationId,
+        account_login: installation.accountLogin,
+        account_type: installation.accountType,
+        created_at: Date.now(),
+      })
+      .execute();
+  }
+}
+
+export async function deleteInstallation(installationId: string): Promise<void> {
+  await db
+    .deleteFrom("github_installations")
+    .where("installation_id", "=", installationId)
+    .execute();
 }
 
 export async function saveGitHubAppCredentials(creds: {
@@ -92,6 +164,38 @@ export async function clearGitHubAppCredentials(): Promise<void> {
   for (const key of keys) {
     await setSetting(key, "");
   }
+  await db.deleteFrom("github_installations").execute();
+}
+
+export async function fetchInstallationInfo(installationId: string): Promise<{
+  accountLogin: string;
+  accountType: string;
+}> {
+  const creds = await getGitHubAppCredentials();
+  if (!creds) {
+    throw new Error("GitHub App not configured");
+  }
+
+  const jwt = createJWT(creds.appId, creds.privateKey);
+
+  const res = await fetch(`${GITHUB_API}/app/installations/${installationId}`, {
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${jwt}`,
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+  });
+
+  if (!res.ok) {
+    const error = await res.text();
+    throw new Error(`Failed to fetch installation info: ${error}`);
+  }
+
+  const data = await res.json();
+  return {
+    accountLogin: data.account.login,
+    accountType: data.account.type,
+  };
 }
 
 function createJWT(appId: string, privateKeyPem: string): string {
@@ -114,16 +218,50 @@ function createJWT(appId: string, privateKeyPem: string): string {
   return `${headerB64}.${payloadB64}.${signature}`;
 }
 
-export async function generateInstallationToken(): Promise<string> {
+export function extractAccountFromRepoUrl(repoUrl: string): string | null {
+  const httpsMatch = repoUrl.match(/github\.com\/([^/]+)\//);
+  if (httpsMatch) return httpsMatch[1];
+  const sshMatch = repoUrl.match(/git@github\.com:([^/]+)\//);
+  if (sshMatch) return sshMatch[1];
+  return null;
+}
+
+async function findInstallationId(repoUrl?: string): Promise<string> {
+  const installations = await getInstallations();
   const creds = await getGitHubAppCredentials();
-  if (!creds || !creds.installationId) {
-    throw new Error("GitHub App not configured or not installed");
+
+  if (repoUrl) {
+    const account = extractAccountFromRepoUrl(repoUrl);
+    if (account) {
+      const installation = installations.find(
+        (i) => i.account_login.toLowerCase() === account.toLowerCase(),
+      );
+      if (installation) return installation.installation_id;
+    }
   }
 
+  if (installations.length > 0) {
+    return installations[0].installation_id;
+  }
+
+  if (creds?.installationId) {
+    return creds.installationId;
+  }
+
+  throw new Error("No GitHub App installation found for this repository");
+}
+
+export async function generateInstallationToken(repoUrl?: string): Promise<string> {
+  const creds = await getGitHubAppCredentials();
+  if (!creds) {
+    throw new Error("GitHub App not configured");
+  }
+
+  const installationId = await findInstallationId(repoUrl);
   const jwt = createJWT(creds.appId, creds.privateKey);
 
   const res = await fetch(
-    `${GITHUB_API}/app/installations/${creds.installationId}/access_tokens`,
+    `${GITHUB_API}/app/installations/${installationId}/access_tokens`,
     {
       method: "POST",
       headers: {
@@ -206,4 +344,76 @@ export async function exchangeCodeForCredentials(code: string): Promise<{
   }
 
   return res.json();
+}
+
+export interface GitHubOwner {
+  login: string;
+  avatar_url: string;
+  type: "User" | "Organization";
+}
+
+export interface GitHubRepo {
+  id: number;
+  name: string;
+  full_name: string;
+  private: boolean;
+  default_branch: string;
+  pushed_at: string;
+  owner: {
+    login: string;
+    avatar_url: string;
+  };
+}
+
+export async function listInstallationRepos(): Promise<{
+  owners: GitHubOwner[];
+  repos: GitHubRepo[];
+}> {
+  const token = await generateInstallationToken();
+
+  const res = await fetch(`${GITHUB_API}/installation/repositories`, {
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${token}`,
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+  });
+
+  if (!res.ok) {
+    const error = await res.text();
+    throw new Error(`Failed to list repos: ${error}`);
+  }
+
+  const data = await res.json();
+  const repos: GitHubRepo[] = data.repositories.map((repo: any) => ({
+    id: repo.id,
+    name: repo.name,
+    full_name: repo.full_name,
+    private: repo.private,
+    default_branch: repo.default_branch,
+    pushed_at: repo.pushed_at,
+    owner: {
+      login: repo.owner.login,
+      avatar_url: repo.owner.avatar_url,
+    },
+  }));
+
+  const ownerMap = new Map<string, GitHubOwner>();
+  for (const repo of repos) {
+    if (!ownerMap.has(repo.owner.login)) {
+      const originalRepo = data.repositories.find(
+        (r: any) => r.owner.login === repo.owner.login,
+      );
+      ownerMap.set(repo.owner.login, {
+        login: repo.owner.login,
+        avatar_url: repo.owner.avatar_url,
+        type: originalRepo?.owner?.type === "Organization" ? "Organization" : "User",
+      });
+    }
+  }
+
+  return {
+    owners: Array.from(ownerMap.values()),
+    repos,
+  };
 }
