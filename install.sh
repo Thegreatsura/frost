@@ -58,10 +58,12 @@ fi
 if ! command -v caddy &> /dev/null; then
   echo "Installing Caddy..."
   apt-get install -y -qq debian-keyring debian-archive-keyring apt-transport-https curl > /dev/null
-  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' 2>/dev/null | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' 2>/dev/null | gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
   curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' 2>/dev/null | tee /etc/apt/sources.list.d/caddy-stable.list > /dev/null
   apt-get update -qq
   apt-get install -y -qq caddy > /dev/null
+  systemctl enable caddy
+  systemctl start caddy
 else
   echo "Caddy already installed"
 fi
@@ -102,6 +104,9 @@ else
   cd "$FROST_DIR"
 fi
 
+# Create data directory
+mkdir -p "$FROST_DIR/data"
+
 # Create .env file
 cat > "$FROST_DIR/.env" << EOF
 FROST_JWT_SECRET=$FROST_JWT_SECRET
@@ -117,7 +122,10 @@ npm run build
 
 # Run setup to set admin password (uses bun:sqlite)
 echo "Setting admin password..."
-bun run setup "$FROST_PASSWORD"
+bun run setup "$FROST_PASSWORD" || {
+  echo -e "${RED}Failed to set admin password. Check bun installation.${NC}"
+  exit 1
+}
 
 # Create systemd service
 echo ""
@@ -143,6 +151,17 @@ EOF
 systemctl daemon-reload
 systemctl enable frost
 systemctl restart frost
+
+# Wait for Frost to start
+echo "Waiting for Frost to start..."
+sleep 3
+
+# Health check
+if curl -s -o /dev/null -w "" http://localhost:3000 2>/dev/null; then
+  echo "Frost is running"
+else
+  echo -e "${YELLOW}Warning: Could not reach Frost. Check: journalctl -u frost -f${NC}"
+fi
 
 # Get server IP
 SERVER_IP=$(curl -s ifconfig.me 2>/dev/null || curl -s api.ipify.org 2>/dev/null || echo "YOUR_SERVER_IP")
