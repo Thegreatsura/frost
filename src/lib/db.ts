@@ -106,6 +106,21 @@ function runMigrations() {
     }
   }
 
+  const hasDomains = sqlite
+    .prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='domains'",
+    )
+    .get();
+
+  if (!hasDomains) {
+    const schema007 = join(process.cwd(), "schema", "007-domains.sql");
+    if (existsSync(schema007)) {
+      const schema = readFileSync(schema007, "utf-8");
+      sqlite.exec(schema);
+      console.log("Applied 007-domains migration");
+    }
+  }
+
   sqlite
     .prepare(
       "INSERT INTO settings (key, value) VALUES ('frost_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",

@@ -8,58 +8,122 @@ NC='\033[0m'
 
 FROST_DIR="/opt/frost"
 UPDATE_MARKER="$FROST_DIR/data/.update-requested"
+BACKUP_DIR="$FROST_DIR/.backup"
 PRE_START=false
 
 if [ "$1" = "--pre-start" ]; then
   PRE_START=true
 fi
 
-echo -e "${GREEN}Frost Update Script${NC}"
+log() {
+  echo -e "${YELLOW}$1${NC}"
+}
+
+error() {
+  echo -e "${RED}$1${NC}"
+}
+
+success() {
+  echo -e "${GREEN}$1${NC}"
+}
+
+cleanup_on_failure() {
+  error "Update failed!"
+
+  if [ -d "$BACKUP_DIR/.next" ]; then
+    log "Restoring previous build..."
+    rm -rf "$FROST_DIR/.next"
+    mv "$BACKUP_DIR/.next" "$FROST_DIR/.next"
+  fi
+
+  rm -rf "$BACKUP_DIR"
+
+  if [ "$PRE_START" = false ]; then
+    log "Attempting to start Frost with previous version..."
+    systemctl start frost 2>/dev/null || true
+  fi
+
+  exit 1
+}
+
+trap cleanup_on_failure ERR
+
+success "Frost Update Script"
 echo ""
 
-# Check if running as root
 if [ "$EUID" -ne 0 ]; then
-  echo -e "${RED}Please run as root (sudo)${NC}"
+  error "Please run as root (sudo)"
   exit 1
 fi
 
-# Check if Frost is installed
 if [ ! -d "$FROST_DIR" ]; then
-  echo -e "${RED}Frost not found at $FROST_DIR${NC}"
+  error "Frost not found at $FROST_DIR"
   echo "Run install.sh first"
   exit 1
 fi
 
-# Remove update marker if present (triggered from UI)
 if [ -f "$UPDATE_MARKER" ]; then
   rm "$UPDATE_MARKER"
-  echo -e "${YELLOW}Update triggered from UI${NC}"
+  log "Update triggered from UI"
 fi
 
 cd "$FROST_DIR"
 
+CURRENT_VERSION=$(cat package.json | grep '"version"' | head -1 | sed 's/.*"version": "\([^"]*\)".*/\1/')
+log "Current version: $CURRENT_VERSION"
+
 if [ "$PRE_START" = false ]; then
-  echo -e "${YELLOW}Stopping Frost...${NC}"
+  log "Stopping Frost..."
   systemctl stop frost 2>/dev/null || true
 fi
 
-echo -e "${YELLOW}Pulling latest changes...${NC}"
-git fetch origin main
+log "Backing up current build..."
+rm -rf "$BACKUP_DIR"
+mkdir -p "$BACKUP_DIR"
+if [ -d "$FROST_DIR/.next" ]; then
+  cp -r "$FROST_DIR/.next" "$BACKUP_DIR/.next"
+fi
+
+log "Fetching latest changes..."
+git fetch origin main --quiet
+
+LATEST_COMMIT=$(git rev-parse origin/main)
+CURRENT_COMMIT=$(git rev-parse HEAD)
+
+if [ "$LATEST_COMMIT" = "$CURRENT_COMMIT" ]; then
+  log "Already up to date"
+  rm -rf "$BACKUP_DIR"
+
+  if [ "$PRE_START" = false ]; then
+    systemctl start frost
+  fi
+  exit 0
+fi
+
+log "Updating from $(git rev-parse --short HEAD) to $(git rev-parse --short origin/main)..."
 git reset --hard origin/main
 
-echo -e "${YELLOW}Installing dependencies...${NC}"
-npm install --legacy-peer-deps --silent
+NEW_VERSION=$(cat package.json | grep '"version"' | head -1 | sed 's/.*"version": "\([^"]*\)".*/\1/')
+log "New version: $NEW_VERSION"
 
-echo -e "${YELLOW}Building...${NC}"
-npm run build
+log "Cleaning node_modules..."
+rm -rf node_modules package-lock.json
+
+log "Installing dependencies..."
+npm install --legacy-peer-deps --silent 2>&1
+
+log "Building..."
+npm run build 2>&1
+
+rm -rf "$BACKUP_DIR"
 
 if [ "$PRE_START" = false ]; then
-  echo -e "${YELLOW}Starting Frost...${NC}"
+  log "Starting Frost..."
   systemctl start frost
 fi
 
 echo ""
-echo -e "${GREEN}Update complete!${NC}"
+success "Update complete! $CURRENT_VERSION → $NEW_VERSION"
 echo ""
 if [ "$PRE_START" = true ]; then
   echo "Frost will start automatically"

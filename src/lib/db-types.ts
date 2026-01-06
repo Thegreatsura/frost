@@ -60,8 +60,21 @@ export interface Setting {
   value: string;
 }
 
+export interface Domain {
+  id: string;
+  service_id: string;
+  domain: string;
+  type: Generated<string>;
+  redirect_target: string | null;
+  redirect_code: Generated<number | null>;
+  dns_verified: Generated<number>;
+  ssl_status: Generated<string>;
+  created_at: number;
+}
+
 export interface DB {
   deployments: Deployment;
+  domains: Domain;
   projects: Project;
   services: Service;
   settings: Setting;
