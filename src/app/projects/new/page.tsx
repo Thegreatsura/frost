@@ -10,49 +10,43 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { useCreateProject } from "@/hooks/use-projects";
+import { CreateProjectInput, EnvVar } from "@/lib/api";
 
 type DeployType = "repo" | "image";
 
 export default function NewProjectPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
+  const createMutation = useCreateProject();
   const [deployType, setDeployType] = useState<DeployType>("repo");
-  const [envVars, setEnvVars] = useState<{ key: string; value: string }[]>([]);
+  const [envVars, setEnvVars] = useState<EnvVar[]>([]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setLoading(true);
-
     const formData = new FormData(e.currentTarget);
     const validEnvVars = envVars.filter((v) => v.key.trim() !== "");
 
-    const data: Record<string, unknown> = {
-      name: formData.get("name"),
+    const data: CreateProjectInput = {
+      name: formData.get("name") as string,
       deploy_type: deployType,
       port: parseInt(formData.get("port") as string, 10) || 3000,
       env_vars: validEnvVars,
     };
 
     if (deployType === "repo") {
-      data.repo_url = formData.get("repo_url");
-      data.branch = formData.get("branch") || "main";
-      data.dockerfile_path = formData.get("dockerfile_path") || "Dockerfile";
+      data.repo_url = formData.get("repo_url") as string;
+      data.branch = (formData.get("branch") as string) || "main";
+      data.dockerfile_path =
+        (formData.get("dockerfile_path") as string) || "Dockerfile";
     } else {
-      data.image_url = formData.get("image_url");
+      data.image_url = formData.get("image_url") as string;
     }
 
-    const res = await fetch("/api/projects", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-
-    if (res.ok) {
-      const project = await res.json();
+    try {
+      const project = await createMutation.mutateAsync(data);
       toast.success("Project created");
       router.push(`/projects/${project.id}`);
-    } else {
-      setLoading(false);
+    } catch {
       toast.error("Failed to create project");
     }
   }
@@ -224,8 +218,12 @@ export default function NewProjectPage() {
             <Separator className="bg-neutral-800" />
 
             <div className="flex gap-2">
-              <Button type="submit" disabled={loading} size="sm">
-                {loading ? (
+              <Button
+                type="submit"
+                disabled={createMutation.isPending}
+                size="sm"
+              >
+                {createMutation.isPending ? (
                   <>
                     <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
                     Creating

@@ -4,8 +4,8 @@ import { StatusDot } from "@/components/status-dot";
 interface ProjectCardProps {
   id: string;
   name: string;
-  repoUrl: string;
-  branch: string;
+  repoUrl: string | null;
+  branch: string | null;
   port: number;
   status?: string;
 }

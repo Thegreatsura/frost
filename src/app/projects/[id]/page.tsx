@@ -2,7 +2,7 @@
 
 import { ExternalLink, Loader2, Pencil, Rocket, Trash2 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/empty-state";
 import { EnvVarEditor } from "@/components/env-var-editor";
@@ -10,98 +10,69 @@ import { StatusDot } from "@/components/status-dot";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  useDeleteProject,
+  useDeployProject,
+  useProject,
+  useUpdateProject,
+} from "@/hooks/use-projects";
+import { Deployment, EnvVar } from "@/lib/api";
 import { DeploymentRow } from "./_components/deployment-row";
-
-interface Deployment {
-  id: string;
-  commit_sha: string;
-  status: string;
-  host_port: number | null;
-  created_at: number;
-  finished_at: number | null;
-  build_log: string | null;
-  error_message: string | null;
-}
-
-interface EnvVar {
-  key: string;
-  value: string;
-}
-
-interface Project {
-  id: string;
-  name: string;
-  deploy_type: "repo" | "image";
-  repo_url: string | null;
-  branch: string | null;
-  dockerfile_path: string | null;
-  image_url: string | null;
-  port: number;
-  env_vars: string;
-  deployments: Deployment[];
-}
 
 export default function ProjectPage() {
   const params = useParams();
   const router = useRouter();
-  const [project, setProject] = useState<Project | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [deploying, setDeploying] = useState(false);
+  const projectId = params.id as string;
+
+  const { data: project, isLoading } = useProject(projectId);
+  const deployMutation = useDeployProject(projectId);
+  const deleteMutation = useDeleteProject();
+  const updateMutation = useUpdateProject(projectId);
+
   const [selectedDeployment, setSelectedDeployment] =
     useState<Deployment | null>(null);
-  const selectedDeploymentRef = useRef<Deployment | null>(null);
+  const selectedDeploymentRef = useRef<string | null>(null);
   const [editingEnv, setEditingEnv] = useState(false);
   const [envVars, setEnvVars] = useState<EnvVar[]>([]);
-  const [savingEnv, setSavingEnv] = useState(false);
 
   useEffect(() => {
-    selectedDeploymentRef.current = selectedDeployment;
-  }, [selectedDeployment]);
-
-  const fetchProject = useCallback(async () => {
-    const res = await fetch(`/api/projects/${params.id}`);
-    if (res.ok) {
-      const data = await res.json();
-      setProject(data);
-      if (data.deployments.length > 0 && !selectedDeploymentRef.current) {
-        setSelectedDeployment(data.deployments[0]);
-      } else if (selectedDeploymentRef.current) {
-        const updated = data.deployments.find(
-          (d: Deployment) => d.id === selectedDeploymentRef.current!.id,
-        );
-        if (updated) setSelectedDeployment(updated);
-      }
+    if (!project?.deployments) return;
+    if (project.deployments.length === 0) {
+      setSelectedDeployment(null);
+      return;
     }
-    setLoading(false);
-  }, [params.id]);
+    if (!selectedDeploymentRef.current) {
+      setSelectedDeployment(project.deployments[0]);
+      selectedDeploymentRef.current = project.deployments[0].id;
+    } else {
+      const updated = project.deployments.find(
+        (d) => d.id === selectedDeploymentRef.current
+      );
+      if (updated) setSelectedDeployment(updated);
+    }
+  }, [project?.deployments]);
 
-  useEffect(() => {
-    fetchProject();
-    const interval = setInterval(fetchProject, 2000);
-    return () => clearInterval(interval);
-  }, [fetchProject]);
+  function handleSelectDeployment(d: Deployment) {
+    setSelectedDeployment(d);
+    selectedDeploymentRef.current = d.id;
+  }
 
   async function handleDeploy() {
-    setDeploying(true);
-    const res = await fetch(`/api/projects/${params.id}/deploy`, {
-      method: "POST",
-    });
-    if (res.ok) {
+    try {
+      await deployMutation.mutateAsync();
       toast.success("Deployment started");
-      await fetchProject();
-    } else {
+    } catch {
       toast.error("Failed to start deployment");
     }
-    setDeploying(false);
   }
 
   async function handleDelete() {
     if (!confirm("Delete this project?")) return;
-    const res = await fetch(`/api/projects/${params.id}`, { method: "DELETE" });
-    if (res.ok) {
+    try {
+      await deleteMutation.mutateAsync(projectId);
       toast.success("Project deleted");
       router.push("/");
-    } else {
+    } catch {
       toast.error("Failed to delete project");
     }
   }
@@ -114,24 +85,17 @@ export default function ProjectPage() {
   }
 
   async function handleSaveEnv() {
-    setSavingEnv(true);
     const validEnvVars = envVars.filter((v) => v.key.trim() !== "");
-    const res = await fetch(`/api/projects/${params.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ env_vars: validEnvVars }),
-    });
-    if (res.ok) {
+    try {
+      await updateMutation.mutateAsync({ env_vars: validEnvVars });
       toast.success("Environment variables saved");
       setEditingEnv(false);
-      await fetchProject();
-    } else {
+    } catch {
       toast.error("Failed to save");
     }
-    setSavingEnv(false);
   }
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -156,8 +120,8 @@ export default function ProjectPage() {
   if (!project)
     return <div className="text-neutral-400">Project not found</div>;
 
-  const runningDeployment = project.deployments.find(
-    (d) => d.status === "running",
+  const runningDeployment = project.deployments?.find(
+    (d) => d.status === "running"
   );
 
   return (
@@ -174,8 +138,12 @@ export default function ProjectPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button onClick={handleDeploy} disabled={deploying} size="sm">
-            {deploying ? (
+          <Button
+            onClick={handleDeploy}
+            disabled={deployMutation.isPending}
+            size="sm"
+          >
+            {deployMutation.isPending ? (
               <>
                 <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
                 Deploying
@@ -229,7 +197,7 @@ export default function ProjectPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              {project.deployments.length === 0 ? (
+              {!project.deployments || project.deployments.length === 0 ? (
                 <div className="p-4">
                   <EmptyState
                     title="No deployments"
@@ -246,7 +214,7 @@ export default function ProjectPage() {
                       status={d.status}
                       createdAt={d.created_at}
                       selected={selectedDeployment?.id === d.id}
-                      onClick={() => setSelectedDeployment(d)}
+                      onClick={() => handleSelectDeployment(d)}
                     />
                   ))}
                 </div>
@@ -312,9 +280,7 @@ export default function ProjectPage() {
             )}
             <div>
               <dt className="text-neutral-500">Container Port</dt>
-              <dd className="mt-1 font-mono text-neutral-300">
-                {project.port}
-              </dd>
+              <dd className="mt-1 font-mono text-neutral-300">{project.port}</dd>
             </div>
           </dl>
         </CardContent>
@@ -337,8 +303,12 @@ export default function ProjectPage() {
             <div className="space-y-4">
               <EnvVarEditor value={envVars} onChange={setEnvVars} />
               <div className="flex gap-2">
-                <Button size="sm" onClick={handleSaveEnv} disabled={savingEnv}>
-                  {savingEnv ? (
+                <Button
+                  size="sm"
+                  onClick={handleSaveEnv}
+                  disabled={updateMutation.isPending}
+                >
+                  {updateMutation.isPending ? (
                     <>
                       <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                       Saving

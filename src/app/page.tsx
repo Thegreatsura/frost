@@ -2,36 +2,14 @@
 
 import { Plus, Rocket } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
+import { useProjects } from "@/hooks/use-projects";
 import { ProjectCard } from "./_components/project-card";
 import { SkeletonCard } from "./_components/skeleton-card";
 
-interface Project {
-  id: string;
-  name: string;
-  repo_url: string;
-  branch: string;
-  port: number;
-  latestStatus?: string;
-}
-
 export default function Home() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function fetchProjects() {
-      const res = await fetch("/api/projects");
-      if (res.ok) {
-        const data = await res.json();
-        setProjects(data);
-      }
-      setLoading(false);
-    }
-    fetchProjects();
-  }, []);
+  const { data: projects, isLoading } = useProjects();
 
   return (
     <div>
@@ -45,13 +23,13 @@ export default function Home() {
         </Button>
       </div>
 
-      {loading ? (
+      {isLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <SkeletonCard />
           <SkeletonCard />
           <SkeletonCard />
         </div>
-      ) : projects.length === 0 ? (
+      ) : !projects || projects.length === 0 ? (
         <EmptyState
           icon={Rocket}
           title="No projects yet"
