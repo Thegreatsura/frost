@@ -1,12 +1,12 @@
 "use client";
 
-import { ExternalLink, Loader2, Pencil, Rocket, Trash2 } from "lucide-react";
+import { Loader2, Pencil, Plus, Rocket, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/empty-state";
 import { EnvVarEditor } from "@/components/env-var-editor";
-import { StatusDot } from "@/components/status-dot";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,8 +16,9 @@ import {
   useProject,
   useUpdateProject,
 } from "@/hooks/use-projects";
-import { Deployment, EnvVar } from "@/lib/api";
-import { DeploymentRow } from "./_components/deployment-row";
+import { useDeleteService } from "@/hooks/use-services";
+import type { EnvVar } from "@/lib/api";
+import { ServiceCard } from "./_components/service-card";
 
 export default function ProjectPage() {
   const params = useParams();
@@ -25,55 +26,41 @@ export default function ProjectPage() {
   const projectId = params.id as string;
 
   const { data: project, isLoading } = useProject(projectId);
-  const deployMutation = useDeployProject(projectId);
+  const deployProjectMutation = useDeployProject(projectId);
   const deleteMutation = useDeleteProject();
   const updateMutation = useUpdateProject(projectId);
+  const deleteServiceMutation = useDeleteService(projectId);
 
-  const [selectedDeployment, setSelectedDeployment] =
-    useState<Deployment | null>(null);
-  const selectedDeploymentRef = useRef<string | null>(null);
   const [editingEnv, setEditingEnv] = useState(false);
   const [envVars, setEnvVars] = useState<EnvVar[]>([]);
 
-  useEffect(() => {
-    if (!project?.deployments) return;
-    if (project.deployments.length === 0) {
-      setSelectedDeployment(null);
-      return;
-    }
-    if (!selectedDeploymentRef.current) {
-      setSelectedDeployment(project.deployments[0]);
-      selectedDeploymentRef.current = project.deployments[0].id;
-    } else {
-      const updated = project.deployments.find(
-        (d) => d.id === selectedDeploymentRef.current
-      );
-      if (updated) setSelectedDeployment(updated);
-    }
-  }, [project?.deployments]);
-
-  function handleSelectDeployment(d: Deployment) {
-    setSelectedDeployment(d);
-    selectedDeploymentRef.current = d.id;
-  }
-
-  async function handleDeploy() {
+  async function handleDeployAll() {
     try {
-      await deployMutation.mutateAsync();
-      toast.success("Deployment started");
+      await deployProjectMutation.mutateAsync();
+      toast.success("Deploying all services");
     } catch {
       toast.error("Failed to start deployment");
     }
   }
 
   async function handleDelete() {
-    if (!confirm("Delete this project?")) return;
+    if (!confirm("Delete this project and all its services?")) return;
     try {
       await deleteMutation.mutateAsync(projectId);
       toast.success("Project deleted");
       router.push("/");
     } catch {
       toast.error("Failed to delete project");
+    }
+  }
+
+  async function handleDeleteService(serviceId: string) {
+    if (!confirm("Delete this service?")) return;
+    try {
+      await deleteServiceMutation.mutateAsync(serviceId);
+      toast.success("Service deleted");
+    } catch {
+      toast.error("Failed to delete service");
     }
   }
 
@@ -109,10 +96,6 @@ export default function ProjectPage() {
           </div>
         </div>
         <Skeleton className="h-32 w-full" />
-        <div className="grid grid-cols-3 gap-6">
-          <Skeleton className="h-64" />
-          <Skeleton className="col-span-2 h-64" />
-        </div>
       </div>
     );
   }
@@ -120,9 +103,8 @@ export default function ProjectPage() {
   if (!project)
     return <div className="text-neutral-400">Project not found</div>;
 
-  const runningDeployment = project.deployments?.find(
-    (d) => d.status === "running"
-  );
+  const services = project.services || [];
+  const hasServices = services.length > 0;
 
   return (
     <div className="space-y-6">
@@ -131,165 +113,76 @@ export default function ProjectPage() {
           <h1 className="text-xl font-medium text-neutral-100">
             {project.name}
           </h1>
-          <p className="mt-1 font-mono text-sm text-neutral-500">
-            {project.deploy_type === "image"
-              ? project.image_url
-              : project.repo_url}
+          <p className="mt-1 text-sm text-neutral-500">
+            {services.length} service{services.length !== 1 ? "s" : ""}
           </p>
         </div>
         <div className="flex gap-2">
-          <Button
-            onClick={handleDeploy}
-            disabled={deployMutation.isPending}
-            size="sm"
-          >
-            {deployMutation.isPending ? (
-              <>
-                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                Deploying
-              </>
-            ) : (
-              <>
-                <Rocket className="mr-1.5 h-4 w-4" />
-                Deploy
-              </>
-            )}
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/projects/${projectId}/services/new`}>
+              <Plus className="mr-1.5 h-4 w-4" />
+              Add Service
+            </Link>
           </Button>
+          {hasServices && (
+            <Button
+              onClick={handleDeployAll}
+              disabled={deployProjectMutation.isPending}
+              size="sm"
+            >
+              {deployProjectMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                  Deploying
+                </>
+              ) : (
+                <>
+                  <Rocket className="mr-1.5 h-4 w-4" />
+                  Deploy All
+                </>
+              )}
+            </Button>
+          )}
           <Button variant="ghost" size="sm" onClick={handleDelete}>
             <Trash2 className="h-4 w-4 text-neutral-500" />
           </Button>
         </div>
       </div>
 
-      {runningDeployment && (
-        <Card className="border-l-2 border-l-green-500 bg-neutral-900 border-neutral-800">
-          <CardContent className="py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <StatusDot status="running" />
-                <span className="text-sm text-neutral-300">
-                  Running on port {runningDeployment.host_port}
-                </span>
-              </div>
-              <a
-                href={`http://localhost:${runningDeployment.host_port}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300"
-              >
-                Open
-                <ExternalLink className="h-3.5 w-3.5" />
-              </a>
-            </div>
-            <p className="mt-1 font-mono text-xs text-neutral-500">
-              {runningDeployment.commit_sha}
-            </p>
+      {!hasServices ? (
+        <Card className="bg-neutral-900 border-neutral-800">
+          <CardContent className="py-12">
+            <EmptyState
+              title="No services yet"
+              description="Add a service to get started with deployments"
+              action={
+                <Button asChild size="sm">
+                  <Link href={`/projects/${projectId}/services/new`}>
+                    <Plus className="mr-1.5 h-4 w-4" />
+                    Add Service
+                  </Link>
+                </Button>
+              }
+            />
           </CardContent>
         </Card>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {services.map((service) => (
+            <ServiceCard
+              key={service.id}
+              service={service}
+              projectId={projectId}
+              onDelete={() => handleDeleteService(service.id)}
+            />
+          ))}
+        </div>
       )}
-
-      <div className="grid grid-cols-3 gap-6">
-        <div className="col-span-1">
-          <Card className="bg-neutral-900 border-neutral-800">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-neutral-300">
-                Deployments
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              {!project.deployments || project.deployments.length === 0 ? (
-                <div className="p-4">
-                  <EmptyState
-                    title="No deployments"
-                    description="Click Deploy to create one"
-                  />
-                </div>
-              ) : (
-                <div className="divide-y divide-neutral-800">
-                  {project.deployments.map((d) => (
-                    <DeploymentRow
-                      key={d.id}
-                      id={d.id}
-                      commitSha={d.commit_sha}
-                      status={d.status}
-                      createdAt={d.created_at}
-                      selected={selectedDeployment?.id === d.id}
-                      onClick={() => handleSelectDeployment(d)}
-                    />
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="col-span-2">
-          {selectedDeployment && (
-            <Card className="bg-neutral-900 border-neutral-800">
-              <CardHeader className="pb-2">
-                <CardTitle className="flex items-center justify-between text-sm font-medium text-neutral-300">
-                  <span>Build Log</span>
-                  <StatusDot status={selectedDeployment.status} showLabel />
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {selectedDeployment.error_message && (
-                  <div className="mb-4 rounded border border-red-900 bg-red-950/50 p-3 text-sm text-red-400">
-                    {selectedDeployment.error_message}
-                  </div>
-                )}
-                <pre className="max-h-96 overflow-auto rounded bg-neutral-950 p-4 font-mono text-xs text-neutral-400">
-                  {selectedDeployment.build_log || "No logs yet..."}
-                </pre>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      </div>
-
-      <Card className="bg-neutral-900 border-neutral-800">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-neutral-300">
-            Settings
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <dl className="grid grid-cols-3 gap-4 text-sm">
-            {project.deploy_type === "repo" ? (
-              <>
-                <div>
-                  <dt className="text-neutral-500">Branch</dt>
-                  <dd className="mt-1 font-mono text-neutral-300">
-                    {project.branch}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-neutral-500">Dockerfile</dt>
-                  <dd className="mt-1 font-mono text-neutral-300">
-                    {project.dockerfile_path}
-                  </dd>
-                </div>
-              </>
-            ) : (
-              <div>
-                <dt className="text-neutral-500">Image</dt>
-                <dd className="mt-1 font-mono text-neutral-300">
-                  {project.image_url}
-                </dd>
-              </div>
-            )}
-            <div>
-              <dt className="text-neutral-500">Container Port</dt>
-              <dd className="mt-1 font-mono text-neutral-300">{project.port}</dd>
-            </div>
-          </dl>
-        </CardContent>
-      </Card>
 
       <Card className="bg-neutral-900 border-neutral-800">
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center justify-between text-sm font-medium text-neutral-300">
-            <span>Environment Variables</span>
+            <span>Shared Environment Variables</span>
             {!editingEnv && (
               <Button variant="ghost" size="sm" onClick={handleEditEnv}>
                 <Pencil className="mr-1 h-3 w-3" />
@@ -299,6 +192,9 @@ export default function ProjectPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
+          <p className="mb-4 text-xs text-neutral-500">
+            These variables are inherited by all services in this project.
+          </p>
           {editingEnv ? (
             <div className="space-y-4">
               <EnvVarEditor value={envVars} onChange={setEnvVars} />
@@ -335,7 +231,7 @@ export default function ProjectPage() {
                 if (vars.length === 0) {
                   return (
                     <p className="text-sm text-neutral-500">
-                      No environment variables configured
+                      No shared environment variables configured
                     </p>
                   );
                 }

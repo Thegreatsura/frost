@@ -1,0 +1,116 @@
+"use client";
+
+import { ExternalLink, Loader2, Rocket, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { toast } from "sonner";
+import { StatusDot } from "@/components/status-dot";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useDeployService } from "@/hooks/use-services";
+import type { Service } from "@/lib/api";
+import { cn } from "@/lib/utils";
+
+interface ServiceCardProps {
+  service: Service;
+  projectId: string;
+  onDelete: () => void;
+}
+
+export function ServiceCard({
+  service,
+  projectId,
+  onDelete,
+}: ServiceCardProps) {
+  const deployMutation = useDeployService(service.id, projectId);
+
+  async function handleDeploy(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      await deployMutation.mutateAsync();
+      toast.success(`Deploying ${service.name}`);
+    } catch {
+      toast.error("Failed to start deployment");
+    }
+  }
+
+  function handleDelete(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    onDelete();
+  }
+
+  const deployment = service.latestDeployment;
+  const isRunning = deployment?.status === "running";
+  const status = deployment?.status || "pending";
+
+  return (
+    <Link href={`/projects/${projectId}/services/${service.id}`}>
+      <Card
+        className={cn(
+          "cursor-pointer bg-neutral-900 border-neutral-800 transition-colors hover:border-neutral-700",
+          isRunning && "border-l-2 border-l-green-500",
+        )}
+      >
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center justify-between text-sm font-medium text-neutral-300">
+            <div className="flex items-center gap-2">
+              <StatusDot status={status} />
+              <span>{service.name}</span>
+            </div>
+            <div className="flex gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={handleDeploy}
+                disabled={deployMutation.isPending}
+              >
+                {deployMutation.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Rocket className="h-3.5 w-3.5" />
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={handleDelete}
+              >
+                <Trash2 className="h-3.5 w-3.5 text-neutral-500" />
+              </Button>
+            </div>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <p className="truncate font-mono text-xs text-neutral-500">
+            {service.deploy_type === "image"
+              ? service.image_url
+              : service.repo_url}
+          </p>
+          {isRunning && deployment?.host_port && (
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-neutral-500">
+                Port {deployment.host_port}
+              </span>
+              <a
+                href={`http://localhost:${deployment.host_port}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300"
+                onClick={(e) => e.stopPropagation()}
+              >
+                Open
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            </div>
+          )}
+          {deployment && !isRunning && (
+            <p className="text-xs text-neutral-500">{deployment.commit_sha}</p>
+          )}
+        </CardContent>
+      </Card>
+    </Link>
+  );
+}

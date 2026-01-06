@@ -23,6 +23,7 @@ export type JsonValue = JsonPrimitive | JsonObject | JsonArray;
 export interface Deployment {
   id: string;
   project_id: string;
+  service_id: string;
   commit_sha: string;
   commit_message: string | null;
   status: Generated<string>;
@@ -37,17 +38,26 @@ export interface Deployment {
 export interface Project {
   id: string;
   name: string;
+  env_vars: Generated<string>;
+  created_at: number;
+}
+
+export interface Service {
+  id: string;
+  project_id: string;
+  name: string;
+  deploy_type: Generated<string>;
   repo_url: string | null;
   branch: Generated<string | null>;
   dockerfile_path: Generated<string | null>;
+  image_url: string | null;
   port: Generated<number>;
   env_vars: Generated<string>;
-  image_url: string | null;
-  deploy_type: Generated<string>;
   created_at: number;
 }
 
 export interface DB {
   deployments: Deployment;
   projects: Project;
+  services: Service;
 }

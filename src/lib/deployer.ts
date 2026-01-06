@@ -5,9 +5,10 @@ import { promisify } from "node:util";
 import type { Selectable } from "kysely";
 import { nanoid } from "nanoid";
 import { db } from "./db";
-import type { Project } from "./db-types";
+import type { Project, Service } from "./db-types";
 import {
   buildImage,
+  createNetwork,
   getAvailablePort,
   pullImage,
   runContainer,
@@ -62,11 +63,48 @@ async function appendLog(id: string, log: string) {
   await updateDeployment(id, { build_log: existingLog + log });
 }
 
-export async function deploy(projectId: string): Promise<string> {
+function parseEnvVars(envVarsJson: string): Record<string, string> {
+  const envVarsList: EnvVar[] = envVarsJson ? JSON.parse(envVarsJson) : [];
+  const envVars: Record<string, string> = {};
+  for (const e of envVarsList) {
+    envVars[e.key] = e.value;
+  }
+  return envVars;
+}
+
+export async function deployProject(projectId: string): Promise<string[]> {
+  const services = await db
+    .selectFrom("services")
+    .selectAll()
+    .where("project_id", "=", projectId)
+    .execute();
+
+  if (services.length === 0) {
+    throw new Error("No services to deploy");
+  }
+
+  const deploymentIds = await Promise.all(
+    services.map((service) => deployService(service.id)),
+  );
+
+  return deploymentIds;
+}
+
+export async function deployService(serviceId: string): Promise<string> {
+  const service = await db
+    .selectFrom("services")
+    .selectAll()
+    .where("id", "=", serviceId)
+    .executeTakeFirst();
+
+  if (!service) {
+    throw new Error("Service not found");
+  }
+
   const project = await db
     .selectFrom("projects")
     .selectAll()
-    .where("id", "=", projectId)
+    .where("id", "=", service.project_id)
     .executeTakeFirst();
 
   if (!project) {
@@ -80,42 +118,45 @@ export async function deploy(projectId: string): Promise<string> {
     .insertInto("deployments")
     .values({
       id: deploymentId,
-      project_id: projectId,
+      project_id: project.id,
+      service_id: serviceId,
       commit_sha: "HEAD",
       status: "pending",
       created_at: now,
     })
     .execute();
 
-  runDeployment(deploymentId, project).catch((err) => {
+  runServiceDeployment(deploymentId, service, project).catch((err) => {
     console.error("Deployment failed:", err);
   });
 
   return deploymentId;
 }
 
-async function runDeployment(
+async function runServiceDeployment(
   deploymentId: string,
+  service: Selectable<Service>,
   project: Selectable<Project>,
 ) {
-  const containerName = `frost-${project.id}`.toLowerCase();
+  const containerName = `frost-${project.id}-${service.name}`.toLowerCase();
+  const networkName = `frost-net-${project.id}`.toLowerCase();
 
-  const envVarsList: EnvVar[] = project.env_vars
-    ? JSON.parse(project.env_vars)
-    : [];
-  const envVars: Record<string, string> = {};
-  for (const e of envVarsList) {
-    envVars[e.key] = e.value;
-  }
+  const projectEnvVars = parseEnvVars(project.env_vars);
+  const serviceEnvVars = parseEnvVars(service.env_vars);
+  const envVars = { ...projectEnvVars, ...serviceEnvVars };
+  const envVarsList: EnvVar[] = Object.entries(envVars).map(([key, value]) => ({
+    key,
+    value,
+  }));
 
   try {
     let imageName: string;
 
-    if (project.deploy_type === "image") {
-      if (!project.image_url) {
+    if (service.deploy_type === "image") {
+      if (!service.image_url) {
         throw new Error("Image URL is required for image deployments");
       }
-      imageName = project.image_url;
+      imageName = service.image_url;
       const imageTag = imageName.split(":")[1] || "latest";
 
       await updateDeployment(deploymentId, { status: "pulling" });
@@ -134,21 +175,21 @@ async function runDeployment(
         .where("id", "=", deploymentId)
         .execute();
     } else {
-      if (!project.repo_url || !project.branch || !project.dockerfile_path) {
+      if (!service.repo_url || !service.branch || !service.dockerfile_path) {
         throw new Error("Repo URL, branch, and Dockerfile path are required");
       }
 
-      const repoPath = join(REPOS_PATH, project.id);
+      const repoPath = join(REPOS_PATH, service.id);
 
       await updateDeployment(deploymentId, { status: "cloning" });
-      await appendLog(deploymentId, `Cloning ${project.repo_url}...\n`);
+      await appendLog(deploymentId, `Cloning ${service.repo_url}...\n`);
 
       if (existsSync(repoPath)) {
         rmSync(repoPath, { recursive: true, force: true });
       }
 
       const { stdout: cloneResult } = await execAsync(
-        `git clone --depth 1 --branch ${project.branch} ${project.repo_url} ${repoPath}`,
+        `git clone --depth 1 --branch ${service.branch} ${service.repo_url} ${repoPath}`,
       );
       await appendLog(deploymentId, cloneResult || "Cloned successfully\n");
 
@@ -177,11 +218,12 @@ async function runDeployment(
       await updateDeployment(deploymentId, { status: "building" });
       await appendLog(deploymentId, `\nBuilding image...\n`);
 
-      imageName = `frost-${project.id}:${commitSha}`.toLowerCase();
+      imageName =
+        `frost-${project.id}-${service.name}:${commitSha}`.toLowerCase();
       const buildResult = await buildImage(
         repoPath,
         imageName,
-        project.dockerfile_path,
+        service.dockerfile_path,
         envVars,
       );
 
@@ -195,14 +237,18 @@ async function runDeployment(
     await updateDeployment(deploymentId, { status: "deploying" });
     await appendLog(deploymentId, `\nStarting container...\n`);
 
+    await createNetwork(networkName);
+
     const hostPort = await getAvailablePort();
-    const runResult = await runContainer(
+    const runResult = await runContainer({
       imageName,
       hostPort,
-      project.port,
-      containerName,
+      containerPort: service.port,
+      name: containerName,
       envVars,
-    );
+      network: networkName,
+      hostname: service.name,
+    });
 
     if (!runResult.success) {
       throw new Error(runResult.error || "Failed to start container");
@@ -234,7 +280,7 @@ async function runDeployment(
     const previousDeployments = await db
       .selectFrom("deployments")
       .select(["id", "container_id"])
-      .where("project_id", "=", project.id)
+      .where("service_id", "=", service.id)
       .where("id", "!=", deploymentId)
       .where("status", "=", "running")
       .execute();

@@ -11,14 +11,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useCreateProject } from "@/hooks/use-projects";
-import { CreateProjectInput, EnvVar } from "@/lib/api";
-
-type DeployType = "repo" | "image";
+import type { CreateProjectInput, EnvVar } from "@/lib/api";
 
 export default function NewProjectPage() {
   const router = useRouter();
   const createMutation = useCreateProject();
-  const [deployType, setDeployType] = useState<DeployType>("repo");
   const [envVars, setEnvVars] = useState<EnvVar[]>([]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -28,19 +25,8 @@ export default function NewProjectPage() {
 
     const data: CreateProjectInput = {
       name: formData.get("name") as string,
-      deploy_type: deployType,
-      port: parseInt(formData.get("port") as string, 10) || 3000,
       env_vars: validEnvVars,
     };
-
-    if (deployType === "repo") {
-      data.repo_url = formData.get("repo_url") as string;
-      data.branch = (formData.get("branch") as string) || "main";
-      data.dockerfile_path =
-        (formData.get("dockerfile_path") as string) || "Dockerfile";
-    } else {
-      data.image_url = formData.get("image_url") as string;
-    }
 
     try {
       const project = await createMutation.mutateAsync(data);
@@ -61,156 +47,31 @@ export default function NewProjectPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-4">
-              <div className="grid gap-3">
-                <Label htmlFor="name" className="text-neutral-300">
-                  Name
-                </Label>
-                <Input
-                  id="name"
-                  name="name"
-                  required
-                  placeholder="my-app"
-                  className="border-neutral-700 bg-neutral-800 text-neutral-100 placeholder:text-neutral-500"
-                />
-              </div>
-
-              <div className="grid gap-3">
-                <Label className="text-neutral-300">Deploy Type</Label>
-                <div className="flex gap-4">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="deploy_type"
-                      value="repo"
-                      checked={deployType === "repo"}
-                      onChange={() => setDeployType("repo")}
-                      className="accent-blue-500"
-                    />
-                    <span className="text-sm text-neutral-300">
-                      Build from Repository
-                    </span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="deploy_type"
-                      value="image"
-                      checked={deployType === "image"}
-                      onChange={() => setDeployType("image")}
-                      className="accent-blue-500"
-                    />
-                    <span className="text-sm text-neutral-300">
-                      Use Docker Image
-                    </span>
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            <Separator className="bg-neutral-800" />
-
-            {deployType === "repo" ? (
-              <div className="space-y-4">
-                <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">
-                  Repository Settings
-                </p>
-
-                <div className="grid gap-3">
-                  <Label htmlFor="repo_url" className="text-neutral-300">
-                    Repository URL
-                  </Label>
-                  <Input
-                    id="repo_url"
-                    name="repo_url"
-                    required
-                    placeholder="https://github.com/user/repo"
-                    className="border-neutral-700 bg-neutral-800 font-mono text-sm text-neutral-100 placeholder:text-neutral-500"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-3">
-                    <Label htmlFor="branch" className="text-neutral-300">
-                      Branch
-                    </Label>
-                    <Input
-                      id="branch"
-                      name="branch"
-                      placeholder="main"
-                      defaultValue="main"
-                      className="border-neutral-700 bg-neutral-800 font-mono text-sm text-neutral-100 placeholder:text-neutral-500"
-                    />
-                  </div>
-
-                  <div className="grid gap-3">
-                    <Label
-                      htmlFor="dockerfile_path"
-                      className="text-neutral-300"
-                    >
-                      Dockerfile
-                    </Label>
-                    <Input
-                      id="dockerfile_path"
-                      name="dockerfile_path"
-                      placeholder="Dockerfile"
-                      defaultValue="Dockerfile"
-                      className="border-neutral-700 bg-neutral-800 font-mono text-sm text-neutral-100 placeholder:text-neutral-500"
-                    />
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">
-                  Image Settings
-                </p>
-
-                <div className="grid gap-3">
-                  <Label htmlFor="image_url" className="text-neutral-300">
-                    Image
-                  </Label>
-                  <Input
-                    id="image_url"
-                    name="image_url"
-                    required
-                    placeholder="nginx:alpine"
-                    className="border-neutral-700 bg-neutral-800 font-mono text-sm text-neutral-100 placeholder:text-neutral-500"
-                  />
-                  <p className="text-xs text-neutral-500">
-                    Docker Hub image or full registry URL (e.g.,
-                    ghcr.io/user/image:tag)
-                  </p>
-                </div>
-              </div>
-            )}
-
-            <Separator className="bg-neutral-800" />
-
-            <div className="space-y-4">
-              <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">
-                Container Settings
+            <div className="grid gap-3">
+              <Label htmlFor="name" className="text-neutral-300">
+                Name
+              </Label>
+              <Input
+                id="name"
+                name="name"
+                required
+                placeholder="my-project"
+                className="border-neutral-700 bg-neutral-800 text-neutral-100 placeholder:text-neutral-500"
+              />
+              <p className="text-xs text-neutral-500">
+                A project groups related services that share the same network.
               </p>
-              <div className="grid gap-3">
-                <Label htmlFor="port" className="text-neutral-300">
-                  Container Port
-                </Label>
-                <Input
-                  id="port"
-                  name="port"
-                  type="number"
-                  placeholder="3000"
-                  defaultValue="3000"
-                  className="w-32 border-neutral-700 bg-neutral-800 font-mono text-sm text-neutral-100 placeholder:text-neutral-500"
-                />
-              </div>
             </div>
 
             <Separator className="bg-neutral-800" />
 
             <div className="space-y-4">
               <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">
-                Environment Variables
+                Shared Environment Variables
+              </p>
+              <p className="text-xs text-neutral-500">
+                These variables will be inherited by all services in this
+                project.
               </p>
               <EnvVarEditor value={envVars} onChange={setEnvVars} />
             </div>

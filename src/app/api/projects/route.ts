@@ -5,55 +5,30 @@ import { db } from "@/lib/db";
 export async function GET() {
   const projects = await db.selectFrom("projects").selectAll().execute();
 
-  const projectsWithStatus = await Promise.all(
+  const projectsWithCount = await Promise.all(
     projects.map(async (project) => {
-      const latestDeployment = await db
-        .selectFrom("deployments")
-        .select("status")
+      const servicesCount = await db
+        .selectFrom("services")
+        .select(db.fn.count("id").as("count"))
         .where("project_id", "=", project.id)
-        .orderBy("created_at", "desc")
-        .limit(1)
         .executeTakeFirst();
 
       return {
         ...project,
-        latestStatus: latestDeployment?.status,
+        servicesCount: Number(servicesCount?.count ?? 0),
       };
     }),
   );
 
-  return NextResponse.json(projectsWithStatus);
+  return NextResponse.json(projectsWithCount);
 }
 
 export async function POST(request: Request) {
   const body = await request.json();
-  const {
-    name,
-    deploy_type = "repo",
-    repo_url,
-    branch = "main",
-    dockerfile_path = "Dockerfile",
-    image_url,
-    port = 3000,
-    env_vars = [],
-  } = body;
+  const { name, env_vars = [] } = body;
 
   if (!name) {
     return NextResponse.json({ error: "name is required" }, { status: 400 });
-  }
-
-  if (deploy_type === "repo" && !repo_url) {
-    return NextResponse.json(
-      { error: "repo_url is required for repo deployments" },
-      { status: 400 },
-    );
-  }
-
-  if (deploy_type === "image" && !image_url) {
-    return NextResponse.json(
-      { error: "image_url is required for image deployments" },
-      { status: 400 },
-    );
   }
 
   const id = nanoid();
@@ -64,12 +39,6 @@ export async function POST(request: Request) {
     .values({
       id,
       name,
-      deploy_type,
-      repo_url: deploy_type === "repo" ? repo_url : null,
-      branch: deploy_type === "repo" ? branch : null,
-      dockerfile_path: deploy_type === "repo" ? dockerfile_path : null,
-      image_url: deploy_type === "image" ? image_url : null,
-      port,
       env_vars: JSON.stringify(env_vars),
       created_at: now,
     })

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { deployProject } from "@/lib/deployer";
+import { deployService } from "@/lib/deployer";
 
 export async function POST(
   request: Request,
@@ -8,17 +8,17 @@ export async function POST(
 ) {
   const { id } = await params;
 
-  const project = await db
-    .selectFrom("projects")
+  const service = await db
+    .selectFrom("services")
     .select("id")
     .where("id", "=", id)
     .executeTakeFirst();
 
-  if (!project) {
+  if (!service) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const deploymentIds = await deployProject(id);
+  const deploymentId = await deployService(id);
 
-  return NextResponse.json({ deployment_ids: deploymentIds }, { status: 202 });
+  return NextResponse.json({ deployment_id: deploymentId }, { status: 202 });
 }

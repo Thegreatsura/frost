@@ -1,6 +1,16 @@
 export interface Project {
   id: string;
   name: string;
+  env_vars: string;
+  created_at: number;
+  services?: Service[];
+  servicesCount?: number;
+}
+
+export interface Service {
+  id: string;
+  project_id: string;
+  name: string;
   deploy_type: "repo" | "image";
   repo_url: string | null;
   branch: string | null;
@@ -8,12 +18,14 @@ export interface Project {
   image_url: string | null;
   port: number;
   env_vars: string;
-  latestStatus?: string;
-  deployments?: Deployment[];
+  created_at: number;
+  latestDeployment?: Deployment;
 }
 
 export interface Deployment {
   id: string;
+  project_id: string;
+  service_id: string;
   commit_sha: string;
   status: string;
   host_port: number | null;
@@ -30,6 +42,16 @@ export interface EnvVar {
 
 export interface CreateProjectInput {
   name: string;
+  env_vars?: EnvVar[];
+}
+
+export interface UpdateProjectInput {
+  name?: string;
+  env_vars?: EnvVar[];
+}
+
+export interface CreateServiceInput {
+  name: string;
   deploy_type: "repo" | "image";
   repo_url?: string;
   branch?: string;
@@ -39,7 +61,8 @@ export interface CreateProjectInput {
   env_vars?: EnvVar[];
 }
 
-export interface UpdateProjectInput {
+export interface UpdateServiceInput {
+  name?: string;
   env_vars?: EnvVar[];
   port?: number;
   branch?: string;
@@ -80,19 +103,58 @@ export const api = {
 
     delete: (id: string): Promise<{ success: boolean }> =>
       fetch(`/api/projects/${id}`, { method: "DELETE" }).then((r) =>
-        handleResponse<{ success: boolean }>(r)
+        handleResponse<{ success: boolean }>(r),
+      ),
+
+    deploy: (id: string): Promise<{ deployment_ids: string[] }> =>
+      fetch(`/api/projects/${id}/deploy`, { method: "POST" }).then((r) =>
+        handleResponse<{ deployment_ids: string[] }>(r),
+      ),
+  },
+
+  services: {
+    list: (projectId: string): Promise<Service[]> =>
+      fetch(`/api/projects/${projectId}/services`).then((r) =>
+        handleResponse<Service[]>(r),
+      ),
+
+    get: (id: string): Promise<Service> =>
+      fetch(`/api/services/${id}`).then((r) => handleResponse<Service>(r)),
+
+    create: (projectId: string, data: CreateServiceInput): Promise<Service> =>
+      fetch(`/api/projects/${projectId}/services`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }).then((r) => handleResponse<Service>(r)),
+
+    update: (id: string, data: UpdateServiceInput): Promise<Service> =>
+      fetch(`/api/services/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }).then((r) => handleResponse<Service>(r)),
+
+    delete: (id: string): Promise<{ success: boolean }> =>
+      fetch(`/api/services/${id}`, { method: "DELETE" }).then((r) =>
+        handleResponse<{ success: boolean }>(r),
       ),
 
     deploy: (id: string): Promise<{ deployment_id: string }> =>
-      fetch(`/api/projects/${id}/deploy`, { method: "POST" }).then((r) =>
-        handleResponse<{ deployment_id: string }>(r)
+      fetch(`/api/services/${id}/deploy`, { method: "POST" }).then((r) =>
+        handleResponse<{ deployment_id: string }>(r),
       ),
   },
 
   deployments: {
     get: (id: string): Promise<Deployment> =>
       fetch(`/api/deployments/${id}`).then((r) =>
-        handleResponse<Deployment>(r)
+        handleResponse<Deployment>(r),
+      ),
+
+    listByService: (serviceId: string): Promise<Deployment[]> =>
+      fetch(`/api/services/${serviceId}/deployments`).then((r) =>
+        handleResponse<Deployment[]>(r),
       ),
   },
 };

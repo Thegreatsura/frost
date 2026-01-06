@@ -36,6 +36,16 @@ function runMigrations() {
     console.log("Applied 001-init migration");
   }
 
+  const hasServices = sqlite
+    .prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='services'",
+    )
+    .get();
+
+  if (hasServices) {
+    return;
+  }
+
   const columns = sqlite.prepare("PRAGMA table_info(projects)").all() as Array<{
     name: string;
   }>;
@@ -57,6 +67,13 @@ function runMigrations() {
       sqlite.exec(schema);
       console.log("Applied 003-image-deploy migration");
     }
+  }
+
+  const schema004 = join(process.cwd(), "schema", "004-multi-container.sql");
+  if (existsSync(schema004)) {
+    const schema = readFileSync(schema004, "utf-8");
+    sqlite.exec(schema);
+    console.log("Applied 004-multi-container migration");
   }
 }
 

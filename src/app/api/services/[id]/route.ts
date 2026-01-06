@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { removeNetwork, stopContainer } from "@/lib/docker";
+import { stopContainer } from "@/lib/docker";
 
 export async function GET(
   request: Request,
@@ -8,40 +8,25 @@ export async function GET(
 ) {
   const { id } = await params;
 
-  const project = await db
-    .selectFrom("projects")
+  const service = await db
+    .selectFrom("services")
     .selectAll()
     .where("id", "=", id)
     .executeTakeFirst();
 
-  if (!project) {
+  if (!service) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const services = await db
-    .selectFrom("services")
+  const latestDeployment = await db
+    .selectFrom("deployments")
     .selectAll()
-    .where("project_id", "=", id)
-    .execute();
+    .where("service_id", "=", id)
+    .orderBy("created_at", "desc")
+    .limit(1)
+    .executeTakeFirst();
 
-  const servicesWithDeployments = await Promise.all(
-    services.map(async (service) => {
-      const latestDeployment = await db
-        .selectFrom("deployments")
-        .selectAll()
-        .where("service_id", "=", service.id)
-        .orderBy("created_at", "desc")
-        .limit(1)
-        .executeTakeFirst();
-
-      return {
-        ...service,
-        latestDeployment,
-      };
-    }),
-  );
-
-  return NextResponse.json({ ...project, services: servicesWithDeployments });
+  return NextResponse.json({ ...service, latestDeployment });
 }
 
 export async function PATCH(
@@ -51,13 +36,13 @@ export async function PATCH(
   const { id } = await params;
   const body = await request.json();
 
-  const project = await db
-    .selectFrom("projects")
+  const service = await db
+    .selectFrom("services")
     .selectAll()
     .where("id", "=", id)
     .executeTakeFirst();
 
-  if (!project) {
+  if (!service) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
@@ -68,17 +53,36 @@ export async function PATCH(
   if (body.env_vars !== undefined) {
     updates.env_vars = JSON.stringify(body.env_vars);
   }
+  if (body.port !== undefined) {
+    updates.port = body.port;
+  }
+  if (service.deploy_type === "repo") {
+    if (body.branch !== undefined) {
+      updates.branch = body.branch;
+    }
+    if (body.dockerfile_path !== undefined) {
+      updates.dockerfile_path = body.dockerfile_path;
+    }
+    if (body.repo_url !== undefined) {
+      updates.repo_url = body.repo_url;
+    }
+  }
+  if (service.deploy_type === "image") {
+    if (body.image_url !== undefined) {
+      updates.image_url = body.image_url;
+    }
+  }
 
   if (Object.keys(updates).length > 0) {
     await db
-      .updateTable("projects")
+      .updateTable("services")
       .set(updates)
       .where("id", "=", id)
       .execute();
   }
 
   const updated = await db
-    .selectFrom("projects")
+    .selectFrom("services")
     .selectAll()
     .where("id", "=", id)
     .executeTakeFirst();
@@ -95,7 +99,7 @@ export async function DELETE(
   const deployments = await db
     .selectFrom("deployments")
     .select("container_id")
-    .where("project_id", "=", id)
+    .where("service_id", "=", id)
     .execute();
 
   for (const deployment of deployments) {
@@ -104,9 +108,7 @@ export async function DELETE(
     }
   }
 
-  await removeNetwork(`frost-net-${id}`.toLowerCase());
-
-  await db.deleteFrom("projects").where("id", "=", id).execute();
+  await db.deleteFrom("services").where("id", "=", id).execute();
 
   return NextResponse.json({ success: true });
 }

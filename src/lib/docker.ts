@@ -94,13 +94,28 @@ export async function pullImage(imageName: string): Promise<BuildResult> {
   });
 }
 
+export interface RunContainerOptions {
+  imageName: string;
+  hostPort: number;
+  containerPort: number;
+  name: string;
+  envVars?: Record<string, string>;
+  network?: string;
+  hostname?: string;
+}
+
 export async function runContainer(
-  imageName: string,
-  hostPort: number,
-  containerPort: number,
-  name: string,
-  envVars?: Record<string, string>,
+  options: RunContainerOptions,
 ): Promise<RunResult> {
+  const {
+    imageName,
+    hostPort,
+    containerPort,
+    name,
+    envVars,
+    network,
+    hostname,
+  } = options;
   try {
     await stopContainer(name);
 
@@ -109,8 +124,10 @@ export async function runContainer(
           .map(([k, v]) => `-e ${k}=${JSON.stringify(v)}`)
           .join(" ")
       : "";
+    const networkFlag = network ? `--network ${network}` : "";
+    const hostnameFlag = hostname ? `--hostname ${hostname}` : "";
     const { stdout } = await execAsync(
-      `docker run -d --name ${name} -p ${hostPort}:${containerPort} ${envFlags} ${imageName}`.replace(
+      `docker run -d --name ${name} -p ${hostPort}:${containerPort} ${networkFlag} ${hostnameFlag} ${envFlags} ${imageName}`.replace(
         /\s+/g,
         " ",
       ),
@@ -187,4 +204,28 @@ export async function getAvailablePort(
   }
 
   throw new Error("No available ports");
+}
+
+export async function networkExists(name: string): Promise<boolean> {
+  try {
+    await execAsync(`docker network inspect ${name}`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function createNetwork(name: string): Promise<void> {
+  const exists = await networkExists(name);
+  if (!exists) {
+    await execAsync(`docker network create ${name}`);
+  }
+}
+
+export async function removeNetwork(name: string): Promise<void> {
+  try {
+    await execAsync(`docker network rm ${name}`);
+  } catch {
+    // Network might not exist or have containers attached
+  }
 }

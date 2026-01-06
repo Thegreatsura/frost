@@ -33,7 +33,7 @@ export default function Home() {
         <EmptyState
           icon={Rocket}
           title="No projects yet"
-          description="Deploy your first application"
+          description="Create a project to get started"
           action={{ label: "New Project", href: "/projects/new" }}
         />
       ) : (
@@ -43,10 +43,7 @@ export default function Home() {
               key={project.id}
               id={project.id}
               name={project.name}
-              repoUrl={project.repo_url}
-              branch={project.branch}
-              port={project.port}
-              status={project.latestStatus}
+              servicesCount={project.servicesCount ?? 0}
             />
           ))}
         </div>
