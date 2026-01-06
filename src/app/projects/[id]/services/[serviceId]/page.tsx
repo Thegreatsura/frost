@@ -4,12 +4,14 @@ import { ExternalLink, Loader2, Pencil, Rocket, Trash2 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { BreadcrumbHeader } from "@/components/breadcrumb-header";
 import { EmptyState } from "@/components/empty-state";
 import { EnvVarEditor } from "@/components/env-var-editor";
 import { StatusDot } from "@/components/status-dot";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useProject } from "@/hooks/use-projects";
 import {
   useDeleteService,
   useDeployService,
@@ -26,6 +28,7 @@ export default function ServicePage() {
   const projectId = params.id as string;
   const serviceId = params.serviceId as string;
 
+  const { data: project } = useProject(projectId);
   const { data: service, isLoading } = useService(serviceId);
   const deployMutation = useDeployService(serviceId, projectId);
   const deleteMutation = useDeleteService(projectId);
@@ -110,38 +113,67 @@ export default function ServicePage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <Skeleton className="h-7 w-48" />
-            <Skeleton className="mt-2 h-4 w-64" />
+      <>
+        <BreadcrumbHeader
+          items={[
+            { label: project?.name ?? "...", href: `/projects/${projectId}` },
+            { label: "..." },
+          ]}
+        />
+        <main className="container mx-auto px-4 py-8">
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <Skeleton className="h-7 w-48" />
+                <Skeleton className="mt-2 h-4 w-64" />
+              </div>
+              <div className="flex gap-2">
+                <Skeleton className="h-9 w-20" />
+                <Skeleton className="h-9 w-20" />
+              </div>
+            </div>
+            <Skeleton className="h-32 w-full" />
+            <div className="grid grid-cols-3 gap-6">
+              <Skeleton className="h-64" />
+              <Skeleton className="col-span-2 h-64" />
+            </div>
           </div>
-          <div className="flex gap-2">
-            <Skeleton className="h-9 w-20" />
-            <Skeleton className="h-9 w-20" />
-          </div>
-        </div>
-        <Skeleton className="h-32 w-full" />
-        <div className="grid grid-cols-3 gap-6">
-          <Skeleton className="h-64" />
-          <Skeleton className="col-span-2 h-64" />
-        </div>
-      </div>
+        </main>
+      </>
     );
   }
 
   if (!service)
-    return <div className="text-neutral-400">Service not found</div>;
+    return (
+      <>
+        <BreadcrumbHeader
+          items={[
+            { label: project?.name ?? "...", href: `/projects/${projectId}` },
+          ]}
+        />
+        <main className="container mx-auto px-4 py-8">
+          <div className="text-neutral-400">Service not found</div>
+        </main>
+      </>
+    );
 
   const runningDeployment = deployments.find((d) => d.status === "running");
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-medium text-neutral-100">
-            {service.name}
-          </h1>
+    <>
+      <BreadcrumbHeader
+        items={[
+          { label: project?.name ?? "...", href: `/projects/${projectId}` },
+          { label: service.name },
+        ]}
+      />
+      <main className="container mx-auto px-4 py-8">
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-xl font-medium text-neutral-100">
+                {service.name}
+              </h1>
           <p className="mt-1 font-mono text-sm text-neutral-500">
             {service.deploy_type === "image"
               ? service.image_url
@@ -366,8 +398,10 @@ export default function ServicePage() {
               })()}
             </div>
           )}
-        </CardContent>
-      </Card>
-    </div>
+          </CardContent>
+        </Card>
+      </div>
+      </main>
+    </>
   );
 }

@@ -4,12 +4,14 @@ import { Loader2 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
+import { BreadcrumbHeader } from "@/components/breadcrumb-header";
 import { EnvVarEditor } from "@/components/env-var-editor";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { useProject } from "@/hooks/use-projects";
 import { useCreateService } from "@/hooks/use-services";
 import type { CreateServiceInput, EnvVar } from "@/lib/api";
 
@@ -19,6 +21,7 @@ export default function NewServicePage() {
   const params = useParams();
   const router = useRouter();
   const projectId = params.id as string;
+  const { data: project } = useProject(projectId);
   const createMutation = useCreateService(projectId);
   const [deployType, setDeployType] = useState<DeployType>("repo");
   const [envVars, setEnvVars] = useState<EnvVar[]>([]);
@@ -54,13 +57,21 @@ export default function NewServicePage() {
   }
 
   return (
-    <div className="mx-auto max-w-lg">
-      <Card className="border-neutral-800 bg-neutral-900">
-        <CardHeader>
-          <CardTitle className="text-lg font-medium text-neutral-100">
-            New Service
-          </CardTitle>
-        </CardHeader>
+    <>
+      <BreadcrumbHeader
+        items={[
+          { label: project?.name ?? "...", href: `/projects/${projectId}` },
+          { label: "New Service" },
+        ]}
+      />
+      <main className="container mx-auto px-4 py-8">
+        <div className="mx-auto max-w-lg">
+          <Card className="border-neutral-800 bg-neutral-900">
+            <CardHeader>
+              <CardTitle className="text-lg font-medium text-neutral-100">
+                New Service
+              </CardTitle>
+            </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-4">
@@ -250,9 +261,11 @@ export default function NewServicePage() {
                 Cancel
               </Button>
             </div>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+      </main>
+    </>
   );
 }

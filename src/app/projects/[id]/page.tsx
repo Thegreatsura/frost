@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
+import { BreadcrumbHeader } from "@/components/breadcrumb-header";
 import { EmptyState } from "@/components/empty-state";
 import { EnvVarEditor } from "@/components/env-var-editor";
 import { Button } from "@/components/ui/button";
@@ -84,30 +85,45 @@ export default function ProjectPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <Skeleton className="h-7 w-48" />
-            <Skeleton className="mt-2 h-4 w-64" />
+      <>
+        <BreadcrumbHeader items={[{ label: "..." }]} />
+        <main className="container mx-auto px-4 py-8">
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <Skeleton className="h-7 w-48" />
+                <Skeleton className="mt-2 h-4 w-64" />
+              </div>
+              <div className="flex gap-2">
+                <Skeleton className="h-9 w-20" />
+                <Skeleton className="h-9 w-20" />
+              </div>
+            </div>
+            <Skeleton className="h-32 w-full" />
           </div>
-          <div className="flex gap-2">
-            <Skeleton className="h-9 w-20" />
-            <Skeleton className="h-9 w-20" />
-          </div>
-        </div>
-        <Skeleton className="h-32 w-full" />
-      </div>
+        </main>
+      </>
     );
   }
 
   if (!project)
-    return <div className="text-neutral-400">Project not found</div>;
+    return (
+      <>
+        <BreadcrumbHeader items={[]} />
+        <main className="container mx-auto px-4 py-8">
+          <div className="text-neutral-400">Project not found</div>
+        </main>
+      </>
+    );
 
   const services = project.services || [];
   const hasServices = services.length > 0;
 
   return (
-    <div className="space-y-6">
+    <>
+      <BreadcrumbHeader items={[{ label: project.name }]} />
+      <main className="container mx-auto px-4 py-8">
+        <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-medium text-neutral-100">
@@ -245,8 +261,10 @@ export default function ProjectPage() {
               })()}
             </div>
           )}
-        </CardContent>
-      </Card>
-    </div>
+          </CardContent>
+        </Card>
+      </div>
+      </main>
+    </>
   );
 }

@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
+import { BreadcrumbHeader } from "@/components/breadcrumb-header";
 import { EnvVarEditor } from "@/components/env-var-editor";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,8 +39,11 @@ export default function NewProjectPage() {
   }
 
   return (
-    <div className="mx-auto max-w-lg">
-      <Card className="border-neutral-800 bg-neutral-900">
+    <>
+      <BreadcrumbHeader items={[{ label: "New Project" }]} />
+      <main className="container mx-auto px-4 py-8">
+        <div className="mx-auto max-w-lg">
+          <Card className="border-neutral-800 bg-neutral-900">
         <CardHeader>
           <CardTitle className="text-lg font-medium text-neutral-100">
             New Project
@@ -103,8 +107,10 @@ export default function NewProjectPage() {
               </Button>
             </div>
           </form>
-        </CardContent>
-      </Card>
-    </div>
+          </CardContent>
+        </Card>
+      </div>
+      </main>
+    </>
   );
 }

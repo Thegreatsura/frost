@@ -20,16 +20,7 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <body className={inter.className}>
         <QueryProvider>
-          <div className="min-h-screen bg-background">
-            <header className="border-b border-neutral-800">
-              <div className="container mx-auto flex h-14 items-center px-4">
-                <a href="/" className="text-sm font-semibold tracking-tight">
-                  Frost
-                </a>
-              </div>
-            </header>
-            <main className="container mx-auto px-4 py-8">{children}</main>
-          </div>
+          <div className="min-h-screen bg-background">{children}</div>
           <Toaster />
         </QueryProvider>
       </body>

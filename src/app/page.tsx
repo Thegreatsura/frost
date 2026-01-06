@@ -2,6 +2,7 @@
 
 import { Plus, Rocket } from "lucide-react";
 import Link from "next/link";
+import { BreadcrumbHeader } from "@/components/breadcrumb-header";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { useProjects } from "@/hooks/use-projects";
@@ -12,7 +13,9 @@ export default function Home() {
   const { data: projects, isLoading } = useProjects();
 
   return (
-    <div>
+    <>
+      <BreadcrumbHeader items={[]} />
+      <main className="container mx-auto px-4 py-8">
       <div className="mb-8 flex items-center justify-between">
         <h1 className="text-lg font-medium">Projects</h1>
         <Button asChild size="sm">
@@ -48,6 +51,7 @@ export default function Home() {
           ))}
         </div>
       )}
-    </div>
+      </main>
+    </>
   );
 }
