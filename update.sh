@@ -77,10 +77,16 @@ cd "$FROST_DIR"
 
 git config --global --add safe.directory "$FROST_DIR" 2>/dev/null || true
 
-# Ensure bun is in PATH
+# Ensure bun is in PATH and up to date
 if [ -f "$HOME/.bun/bin/bun" ] && [ ! -f /usr/local/bin/bun ]; then
   ln -sf "$HOME/.bun/bin/bun" /usr/local/bin/bun
 fi
+
+log "Upgrading bun..."
+curl -fsSL https://bun.sh/install 2>/dev/null | bash > /dev/null 2>&1 || true
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+ln -sf "$HOME/.bun/bin/bun" /usr/local/bin/bun 2>/dev/null || true
 
 CURRENT_VERSION=$(cat package.json | grep '"version"' | head -1 | sed 's/.*"version": "\([^"]*\)".*/\1/')
 log "Current version: $CURRENT_VERSION"
@@ -129,8 +135,6 @@ log "Building..."
 npm run build 2>&1
 
 log "Running migrations..."
-export BUN_INSTALL="$HOME/.bun"
-export PATH="$BUN_INSTALL/bin:$PATH"
 bun run migrate 2>&1
 
 rm -rf "$BACKUP_DIR"
