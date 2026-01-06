@@ -8,8 +8,19 @@ NC='\033[0m'
 
 FROST_DIR="/opt/frost"
 FROST_REPO="https://github.com/elitan/frost.git"
+FROST_VERSION=""
+
+while getopts "v:" opt; do
+  case $opt in
+    v) FROST_VERSION="$OPTARG" ;;
+    *) echo "Usage: $0 [-v version]"; exit 1 ;;
+  esac
+done
 
 echo -e "${GREEN}Frost Installation Script${NC}"
+if [ -n "$FROST_VERSION" ]; then
+  echo -e "Version: ${YELLOW}$FROST_VERSION${NC}"
+fi
 echo ""
 
 # Check if running as root
@@ -103,13 +114,17 @@ echo -e "${YELLOW}Setting up Frost...${NC}"
 
 # Clone or update Frost
 if [ -d "$FROST_DIR" ]; then
-  echo "Updating existing installation..."
-  cd "$FROST_DIR"
-  git pull origin main
-else
-  echo "Cloning Frost..."
-  git clone "$FROST_REPO" "$FROST_DIR"
-  cd "$FROST_DIR"
+  echo "Removing existing installation..."
+  rm -rf "$FROST_DIR"
+fi
+
+echo "Cloning Frost..."
+git clone "$FROST_REPO" "$FROST_DIR"
+cd "$FROST_DIR"
+
+if [ -n "$FROST_VERSION" ]; then
+  echo "Checking out version $FROST_VERSION..."
+  git checkout "$FROST_VERSION"
 fi
 
 # Create data directory
