@@ -2,6 +2,11 @@
 
 Simple deployment platform. Docker-only, single-user.
 
+## Test VPS
+- IP: 65.21.180.49
+- Domain: frost.j4labs.se
+- SSH: `ssh root@65.21.180.49`
+
 ## Stack
 - Bun + Next.js 16
 - SQLite + Kysely
