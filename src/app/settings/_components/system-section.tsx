@@ -274,7 +274,7 @@ export function SystemSection() {
 
         {showLog && updateResult?.log && (
           <pre className="max-h-64 overflow-auto rounded bg-neutral-900 p-3 text-xs text-neutral-300">
-            {updateResult.log}
+            {updateResult.log.replace(/\x1b\[[0-9;]*m/g, "")}
           </pre>
         )}
 
@@ -307,7 +307,8 @@ export function SystemSection() {
               </div>
             </div>
 
-            {status?.availableVersion && (
+            {status?.availableVersion &&
+              status.availableVersion !== status.currentVersion && (
               <div className="rounded-lg border border-blue-800 bg-blue-900/20 p-4">
                 <div className="flex items-center justify-between">
                   <p className="font-medium text-blue-400">
