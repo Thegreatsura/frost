@@ -40,6 +40,10 @@ FROST_JWT_SECRET=$(openssl rand -base64 32)
 echo ""
 echo -e "${YELLOW}Installing dependencies...${NC}"
 
+# Install build tools
+apt-get update -qq
+apt-get install -y -qq git unzip build-essential > /dev/null
+
 # Install Docker if not present
 if ! command -v docker &> /dev/null; then
   echo "Installing Docker..."
@@ -53,27 +57,34 @@ fi
 # Install Caddy if not present
 if ! command -v caddy &> /dev/null; then
   echo "Installing Caddy..."
-  apt-get update
-  apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl
-  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
-  apt-get update
-  apt-get install -y caddy
+  apt-get install -y -qq debian-keyring debian-archive-keyring apt-transport-https curl > /dev/null
+  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' 2>/dev/null | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' 2>/dev/null | tee /etc/apt/sources.list.d/caddy-stable.list > /dev/null
+  apt-get update -qq
+  apt-get install -y -qq caddy > /dev/null
 else
   echo "Caddy already installed"
 fi
 
-# Install Bun if not present
+# Install Node.js if not present
+if ! command -v node &> /dev/null; then
+  echo "Installing Node.js..."
+  curl -fsSL https://deb.nodesource.com/setup_22.x 2>/dev/null | bash - > /dev/null 2>&1
+  apt-get install -y -qq nodejs > /dev/null
+else
+  echo "Node.js already installed"
+fi
+
+# Install Bun if not present (needed for setup script)
 if ! command -v bun &> /dev/null; then
   echo "Installing Bun..."
-  curl -fsSL https://bun.sh/install | bash
+  curl -fsSL https://bun.sh/install 2>/dev/null | bash > /dev/null 2>&1
   export BUN_INSTALL="$HOME/.bun"
   export PATH="$BUN_INSTALL/bin:$PATH"
 else
   echo "Bun already installed"
 fi
 
-# Ensure bun is in PATH for this script
 export BUN_INSTALL="$HOME/.bun"
 export PATH="$BUN_INSTALL/bin:$PATH"
 
@@ -82,7 +93,7 @@ echo -e "${YELLOW}Setting up Frost...${NC}"
 
 # Clone or update Frost
 if [ -d "$FROST_DIR" ]; then
-  echo "Updating existing Frost installation..."
+  echo "Updating existing installation..."
   cd "$FROST_DIR"
   git pull origin main
 else
@@ -99,12 +110,12 @@ EOF
 
 # Install dependencies and build
 echo "Installing dependencies..."
-bun install
+npm install --legacy-peer-deps --silent
 
 echo "Building..."
-bun run build
+npm run build
 
-# Run setup to set admin password
+# Run setup to set admin password (uses bun:sqlite)
 echo "Setting admin password..."
 bun run setup "$FROST_PASSWORD"
 
@@ -120,7 +131,7 @@ After=network.target docker.service caddy.service
 [Service]
 Type=simple
 WorkingDirectory=$FROST_DIR
-ExecStart=$HOME/.bun/bin/bun run start
+ExecStart=/usr/bin/npm run start
 Restart=on-failure
 EnvironmentFile=$FROST_DIR/.env
 
@@ -134,7 +145,7 @@ systemctl enable frost
 systemctl restart frost
 
 # Get server IP
-SERVER_IP=$(curl -s ifconfig.me || curl -s api.ipify.org || echo "YOUR_SERVER_IP")
+SERVER_IP=$(curl -s ifconfig.me 2>/dev/null || curl -s api.ipify.org 2>/dev/null || echo "YOUR_SERVER_IP")
 
 echo ""
 echo -e "${GREEN}Installation complete!${NC}"

@@ -94,16 +94,22 @@ export function ServiceCard({
               <span className="text-xs text-neutral-500">
                 Port {deployment.host_port}
               </span>
-              <a
-                href={`http://localhost:${deployment.host_port}`}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
                 className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300"
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  window.open(
+                    `http://localhost:${deployment.host_port}`,
+                    "_blank",
+                    "noopener,noreferrer",
+                  );
+                }}
               >
                 Open
                 <ExternalLink className="h-3 w-3" />
-              </a>
+              </button>
             </div>
           )}
           {deployment && !isRunning && (

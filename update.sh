@@ -26,10 +26,6 @@ fi
 
 cd "$FROST_DIR"
 
-# Ensure bun is in PATH
-export BUN_INSTALL="$HOME/.bun"
-export PATH="$BUN_INSTALL/bin:$PATH"
-
 echo -e "${YELLOW}Stopping Frost...${NC}"
 systemctl stop frost
 
@@ -37,10 +33,10 @@ echo -e "${YELLOW}Pulling latest changes...${NC}"
 git pull origin main
 
 echo -e "${YELLOW}Installing dependencies...${NC}"
-bun install
+npm install --legacy-peer-deps --silent
 
 echo -e "${YELLOW}Building...${NC}"
-bun run build
+npm run build
 
 echo -e "${YELLOW}Starting Frost...${NC}"
 systemctl start frost

@@ -9,11 +9,11 @@ export function FrostLogo({ className, size = 20 }: FrostLogoProps) {
       width={size}
       height={size}
       viewBox="0 0 64 64"
-      fill="currentColor"
       className={className}
       aria-hidden="true"
     >
-      <circle cx="32" cy="32" r="12" />
+      <circle cx="32" cy="32" r="30" fill="black" />
+      <circle cx="32" cy="32" r="10" fill="white" />
     </svg>
   );
 }
