@@ -148,10 +148,10 @@ export function UpdateCard() {
               )}
             </div>
 
-            {status.releaseNotes && (
+            {status.releaseNotes?.trim() && (
               <div className="mt-3 max-h-48 overflow-y-auto rounded border border-neutral-700 bg-neutral-800/50 p-3">
                 <pre className="whitespace-pre-wrap text-xs text-neutral-300">
-                  {status.releaseNotes}
+                  {status.releaseNotes.trim()}
                 </pre>
               </div>
             )}

@@ -321,12 +321,6 @@ export default function ServicePage() {
                     </dd>
                   </div>
                 )}
-                <div>
-                  <dt className="text-neutral-500">Container Port</dt>
-                  <dd className="mt-1 font-mono text-neutral-300">
-                    {service.port}
-                  </dd>
-                </div>
               </dl>
             </CardContent>
           </Card>

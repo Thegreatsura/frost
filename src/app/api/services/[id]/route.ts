@@ -53,9 +53,6 @@ export async function PATCH(
   if (body.env_vars !== undefined) {
     updates.env_vars = JSON.stringify(body.env_vars);
   }
-  if (body.port !== undefined) {
-    updates.port = body.port;
-  }
   if (service.deploy_type === "repo") {
     if (body.branch !== undefined) {
       updates.branch = body.branch;

@@ -47,7 +47,6 @@ export async function POST(
     branch = "main",
     dockerfile_path = "Dockerfile",
     image_url,
-    port = 3000,
     env_vars = [],
   } = body;
 
@@ -107,7 +106,6 @@ export async function POST(
       branch: deploy_type === "repo" ? branch : null,
       dockerfile_path: deploy_type === "repo" ? dockerfile_path : null,
       image_url: deploy_type === "image" ? image_url : null,
-      port,
       env_vars: JSON.stringify(env_vars),
       created_at: now,
     })

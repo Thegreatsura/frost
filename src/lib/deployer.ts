@@ -243,7 +243,6 @@ async function runServiceDeployment(
     const runResult = await runContainer({
       imageName,
       hostPort,
-      containerPort: service.port,
       name: containerName,
       envVars,
       network: networkName,
