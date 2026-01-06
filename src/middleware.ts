@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
@@ -9,6 +9,21 @@ const DEFAULT_SECRET = "frost-default-secret-change-me";
 function isAuthEnabled(): boolean {
   const secret = process.env.FROST_JWT_SECRET;
   return secret !== undefined && secret !== DEFAULT_SECRET;
+}
+
+function getApiKey(): string | null {
+  const secret = process.env.FROST_JWT_SECRET;
+  if (!secret || secret === DEFAULT_SECRET) return null;
+  return createHash("sha256")
+    .update(`${secret}frost-api-key`)
+    .digest("hex")
+    .slice(0, 32);
+}
+
+function verifyApiToken(token: string): boolean {
+  const apiKey = getApiKey();
+  if (!apiKey) return false;
+  return token === apiKey;
 }
 
 function verifySessionToken(token: string): boolean {
@@ -43,14 +58,23 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const token = request.cookies.get("frost_session")?.value;
-
-  if (!token || !verifySessionToken(token)) {
-    const loginUrl = new URL("/login", request.url);
-    return NextResponse.redirect(loginUrl);
+  const apiToken = request.headers.get("x-frost-token");
+  if (apiToken && verifyApiToken(apiToken)) {
+    return NextResponse.next();
   }
 
-  return NextResponse.next();
+  const sessionToken = request.cookies.get("frost_session")?.value;
+
+  if (sessionToken && verifySessionToken(sessionToken)) {
+    return NextResponse.next();
+  }
+
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const loginUrl = new URL("/login", request.url);
+  return NextResponse.redirect(loginUrl);
 }
 
 export const config = {
