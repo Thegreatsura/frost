@@ -75,6 +75,8 @@ fi
 
 cd "$FROST_DIR"
 
+git config --global --add safe.directory "$FROST_DIR" 2>/dev/null || true
+
 CURRENT_VERSION=$(cat package.json | grep '"version"' | head -1 | sed 's/.*"version": "\([^"]*\)".*/\1/')
 log "Current version: $CURRENT_VERSION"
 
