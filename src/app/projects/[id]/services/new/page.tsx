@@ -10,10 +10,18 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { useProject } from "@/hooks/use-projects";
 import { useCreateService } from "@/hooks/use-services";
 import type { CreateServiceInput, EnvVar } from "@/lib/api";
+import { SERVICE_TEMPLATES } from "@/lib/templates";
 import { RepoSelector } from "./_components/repo-selector";
 
 type DeployType = "repo" | "image";
@@ -33,7 +41,26 @@ export default function NewServicePage() {
     ownerAvatar?: string;
   } | null>(null);
   const [showManualInput, setShowManualInput] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<string>("");
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const imageUrlRef = useRef<HTMLInputElement>(null);
+  const containerPortRef = useRef<HTMLInputElement>(null);
+
+  function handleTemplateChange(templateId: string) {
+    setSelectedTemplate(templateId);
+    const template = SERVICE_TEMPLATES.find((t) => t.id === templateId);
+    if (template) {
+      if (imageUrlRef.current) {
+        imageUrlRef.current.value = template.image;
+      }
+      if (containerPortRef.current) {
+        containerPortRef.current.value = String(template.containerPort ?? 8080);
+      }
+      if (nameInputRef.current && !nameInputRef.current.value) {
+        nameInputRef.current.value = template.id;
+      }
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -271,10 +298,34 @@ export default function NewServicePage() {
                     </p>
 
                     <div className="grid gap-3">
+                      <Label className="text-neutral-300">Template</Label>
+                      <Select
+                        value={selectedTemplate}
+                        onValueChange={handleTemplateChange}
+                      >
+                        <SelectTrigger className="border-neutral-700 bg-neutral-800 text-neutral-100">
+                          <SelectValue placeholder="Select a template (optional)" />
+                        </SelectTrigger>
+                        <SelectContent className="border-neutral-700 bg-neutral-800">
+                          {SERVICE_TEMPLATES.map((t) => (
+                            <SelectItem
+                              key={t.id}
+                              value={t.id}
+                              className="text-neutral-100 focus:bg-neutral-700 focus:text-neutral-100"
+                            >
+                              {t.name} - {t.description}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="grid gap-3">
                       <Label htmlFor="image_url" className="text-neutral-300">
                         Image
                       </Label>
                       <Input
+                        ref={imageUrlRef}
                         id="image_url"
                         name="image_url"
                         required
@@ -304,6 +355,7 @@ export default function NewServicePage() {
                       Container Port
                     </Label>
                     <Input
+                      ref={containerPortRef}
                       id="container_port"
                       name="container_port"
                       type="number"
