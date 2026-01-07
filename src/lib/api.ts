@@ -28,6 +28,8 @@ export interface Service {
   image_url: string | null;
   env_vars: string;
   container_port: number | null;
+  health_check_path: string | null;
+  health_check_timeout: number | null;
   created_at: number;
   latestDeployment?: Deployment;
 }
@@ -125,6 +127,8 @@ export interface UpdateServiceInput {
   repo_url?: string;
   image_url?: string;
   container_port?: number;
+  health_check_path?: string | null;
+  health_check_timeout?: number;
 }
 
 async function handleResponse<T>(res: Response): Promise<T> {

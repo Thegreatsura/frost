@@ -80,6 +80,8 @@ export interface Service {
   env_vars: Generated<string>;
   created_at: number;
   container_port: Generated<number | null>;
+  health_check_path: Generated<string | null>;
+  health_check_timeout: Generated<number | null>;
 }
 
 export interface Setting {

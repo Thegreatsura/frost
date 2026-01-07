@@ -282,9 +282,20 @@ async function runServiceDeployment(
       deploymentId,
       `Container started: ${runResult.containerId.substring(0, 12)}\n`,
     );
-    await appendLog(deploymentId, `Waiting for container to be healthy...\n`);
+    const healthCheckType = service.health_check_path
+      ? `HTTP ${service.health_check_path}`
+      : "TCP";
+    await appendLog(
+      deploymentId,
+      `Health check (${healthCheckType}) on port ${hostPort}...\n`,
+    );
 
-    const isHealthy = await waitForHealthy(runResult.containerId);
+    const isHealthy = await waitForHealthy({
+      containerId: runResult.containerId,
+      port: hostPort,
+      path: service.health_check_path,
+      timeoutSeconds: service.health_check_timeout ?? 60,
+    });
     if (!isHealthy) {
       throw new Error("Container failed health check");
     }

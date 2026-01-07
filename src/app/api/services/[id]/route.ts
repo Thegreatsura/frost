@@ -79,6 +79,18 @@ export async function PATCH(
       updates.image_url = body.image_url;
     }
   }
+  if (body.health_check_path !== undefined) {
+    updates.health_check_path = body.health_check_path;
+  }
+  if (body.health_check_timeout !== undefined) {
+    if (body.health_check_timeout < 1 || body.health_check_timeout > 300) {
+      return NextResponse.json(
+        { error: "health_check_timeout must be between 1 and 300" },
+        { status: 400 },
+      );
+    }
+    updates.health_check_timeout = body.health_check_timeout;
+  }
 
   if (Object.keys(updates).length > 0) {
     await db

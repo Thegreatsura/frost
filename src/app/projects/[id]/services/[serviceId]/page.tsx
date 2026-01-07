@@ -42,6 +42,9 @@ export default function ServicePage() {
   const [editingEnv, setEditingEnv] = useState(false);
   const [envVars, setEnvVars] = useState<EnvVar[]>([]);
   const [serverIp, setServerIp] = useState<string | null>(null);
+  const [editingHealth, setEditingHealth] = useState(false);
+  const [healthPath, setHealthPath] = useState<string>("");
+  const [healthTimeout, setHealthTimeout] = useState<number>(60);
 
   useEffect(() => {
     api.settings.get().then((s) => setServerIp(s.server_ip));
@@ -103,6 +106,27 @@ export default function ServicePage() {
     if (service) {
       setEnvVars(service.env_vars ? JSON.parse(service.env_vars) : []);
       setEditingEnv(true);
+    }
+  }
+
+  function handleEditHealth() {
+    if (service) {
+      setHealthPath(service.health_check_path ?? "");
+      setHealthTimeout(service.health_check_timeout ?? 60);
+      setEditingHealth(true);
+    }
+  }
+
+  async function handleSaveHealth() {
+    try {
+      await updateMutation.mutateAsync({
+        health_check_path: healthPath || null,
+        health_check_timeout: healthTimeout,
+      });
+      toast.success("Health check settings saved");
+      setEditingHealth(false);
+    } catch {
+      toast.error("Failed to save");
     }
   }
 
@@ -334,6 +358,99 @@ export default function ServicePage() {
                   </dd>
                 </div>
               </dl>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-neutral-900 border-neutral-800">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center justify-between text-sm font-medium text-neutral-300">
+                <span>Health Check</span>
+                {!editingHealth && (
+                  <Button variant="ghost" size="sm" onClick={handleEditHealth}>
+                    <Pencil className="mr-1 h-3 w-3" />
+                    Edit
+                  </Button>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="mb-4 text-xs text-neutral-500">
+                Verify app is responding before marking deployment as
+                successful.
+              </p>
+              {editingHealth ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <label className="block">
+                      <span className="mb-1 block text-xs text-neutral-500">
+                        Path (empty = TCP check)
+                      </span>
+                      <input
+                        type="text"
+                        value={healthPath}
+                        onChange={(e) => setHealthPath(e.target.value)}
+                        placeholder="/health"
+                        className="w-full rounded border border-neutral-700 bg-neutral-800 px-3 py-1.5 font-mono text-sm text-neutral-200 placeholder:text-neutral-600 focus:border-neutral-600 focus:outline-none"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-xs text-neutral-500">
+                        Timeout (seconds)
+                      </span>
+                      <input
+                        type="number"
+                        value={healthTimeout}
+                        onChange={(e) =>
+                          setHealthTimeout(Number(e.target.value))
+                        }
+                        min={1}
+                        max={300}
+                        className="w-full rounded border border-neutral-700 bg-neutral-800 px-3 py-1.5 font-mono text-sm text-neutral-200 focus:border-neutral-600 focus:outline-none"
+                      />
+                    </label>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={handleSaveHealth}
+                      disabled={updateMutation.isPending}
+                    >
+                      {updateMutation.isPending ? (
+                        <>
+                          <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                          Saving
+                        </>
+                      ) : (
+                        "Save"
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setEditingHealth(false)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <dl className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <dt className="text-neutral-500">Method</dt>
+                    <dd className="mt-1 font-mono text-neutral-300">
+                      {service.health_check_path
+                        ? `HTTP GET ${service.health_check_path}`
+                        : "TCP"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-neutral-500">Timeout</dt>
+                    <dd className="mt-1 font-mono text-neutral-300">
+                      {service.health_check_timeout ?? 60}s
+                    </dd>
+                  </div>
+                </dl>
+              )}
             </CardContent>
           </Card>
 

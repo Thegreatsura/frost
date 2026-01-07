@@ -1,4 +1,5 @@
 import { exec, spawn } from "node:child_process";
+import { createConnection } from "node:net";
 import { basename, dirname, join } from "node:path";
 import { promisify } from "node:util";
 
@@ -166,19 +167,64 @@ export async function getContainerStatus(containerId: string): Promise<string> {
   }
 }
 
+function checkTcp(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = createConnection({ port, host: "127.0.0.1" });
+    socket.setTimeout(2000);
+    socket.on("connect", () => {
+      socket.destroy();
+      resolve(true);
+    });
+    socket.on("error", () => {
+      socket.destroy();
+      resolve(false);
+    });
+    socket.on("timeout", () => {
+      socket.destroy();
+      resolve(false);
+    });
+  });
+}
+
+async function checkHttp(port: number, path: string): Promise<boolean> {
+  try {
+    const url = `http://127.0.0.1:${port}${path.startsWith("/") ? path : `/${path}`}`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(2000) });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+export interface HealthCheckOptions {
+  containerId: string;
+  port: number;
+  path?: string | null;
+  timeoutSeconds?: number;
+}
+
 export async function waitForHealthy(
-  containerId: string,
-  maxAttempts: number = 30,
-  intervalMs: number = 1000,
+  options: HealthCheckOptions,
 ): Promise<boolean> {
+  const { containerId, port, path, timeoutSeconds = 60 } = options;
+  const intervalMs = 1000;
+  const maxAttempts = timeoutSeconds;
+
   for (let i = 0; i < maxAttempts; i++) {
     const status = await getContainerStatus(containerId);
-    if (status === "running") {
-      return true;
-    }
     if (status === "exited" || status === "dead") {
       return false;
     }
+
+    if (status === "running") {
+      const isHealthy = path
+        ? await checkHttp(port, path)
+        : await checkTcp(port);
+      if (isHealthy) {
+        return true;
+      }
+    }
+
     await new Promise((r) => setTimeout(r, intervalMs));
   }
   return false;
