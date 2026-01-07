@@ -14,7 +14,7 @@ import {
   Search,
   Trash2,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -61,14 +61,20 @@ export function DomainsSection({
   const [redirectCode, setRedirectCode] = useState<"301" | "307">("301");
 
   const proxyDomains = domains?.filter((d) => d.type === "proxy") || [];
-  const unverifiedDomainIds =
-    domains?.filter((d) => d.dns_verified !== 1).map((d) => d.id) || [];
-  const pendingSslDomainIds =
-    domains
-      ?.filter((d) => d.dns_verified === 1 && d.ssl_status !== "active")
-      .map((d) => d.id) || [];
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: unverifiedDomainIds changes on every render, use length as proxy
+  const unverifiedDomainIds = useMemo(
+    () => domains?.filter((d) => d.dns_verified !== 1).map((d) => d.id) || [],
+    [domains],
+  );
+
+  const pendingSslDomainIds = useMemo(
+    () =>
+      domains
+        ?.filter((d) => d.dns_verified === 1 && d.ssl_status !== "active")
+        .map((d) => d.id) || [],
+    [domains],
+  );
+
   useEffect(() => {
     if (unverifiedDomainIds.length === 0) return;
 
@@ -87,9 +93,8 @@ export function DomainsSection({
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [unverifiedDomainIds.length, verifyDnsMutation, domains]);
+  }, [unverifiedDomainIds, verifyDnsMutation, domains]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: pendingSslDomainIds changes on every render, use length as proxy
   useEffect(() => {
     if (pendingSslDomainIds.length === 0) return;
 
@@ -108,7 +113,7 @@ export function DomainsSection({
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [pendingSslDomainIds.length, verifySslMutation, domains]);
+  }, [pendingSslDomainIds, verifySslMutation, domains]);
 
   async function handleAddDomain() {
     if (!newDomain) return;
