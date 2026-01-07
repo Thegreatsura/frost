@@ -340,6 +340,7 @@ export default function ServicePage() {
           <DomainsSection
             serviceId={serviceId}
             hasRunningDeployment={!!runningDeployment}
+            serverIp={serverIp}
           />
 
           <Card className="bg-neutral-900 border-neutral-800">

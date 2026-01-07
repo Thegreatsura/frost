@@ -12,8 +12,8 @@ export function useAddDomain(serviceId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: AddDomainInput) => api.domains.add(serviceId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
+    onSuccess: async () => {
+      await queryClient.refetchQueries({
         queryKey: ["services", serviceId, "domains"],
       });
     },
@@ -25,8 +25,8 @@ export function useUpdateDomain(serviceId: string) {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateDomainInput }) =>
       api.domains.update(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
+    onSuccess: async () => {
+      await queryClient.refetchQueries({
         queryKey: ["services", serviceId, "domains"],
       });
     },
@@ -37,8 +37,8 @@ export function useDeleteDomain(serviceId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.domains.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
+    onSuccess: async () => {
+      await queryClient.refetchQueries({
         queryKey: ["services", serviceId, "domains"],
       });
     },
@@ -49,8 +49,20 @@ export function useVerifyDomainDns(serviceId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.domains.verifyDns(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
+    onSuccess: async () => {
+      await queryClient.refetchQueries({
+        queryKey: ["services", serviceId, "domains"],
+      });
+    },
+  });
+}
+
+export function useVerifyDomainSsl(serviceId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.domains.verifySsl(id),
+    onSuccess: async () => {
+      await queryClient.refetchQueries({
         queryKey: ["services", serviceId, "domains"],
       });
     },

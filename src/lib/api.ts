@@ -83,6 +83,12 @@ export interface DnsStatus {
   dnsVerified: boolean;
 }
 
+export interface SslStatus {
+  working: boolean;
+  status: "pending" | "active" | "failed";
+  error?: string;
+}
+
 export interface Settings {
   domain: string | null;
   email: string | null;
@@ -239,6 +245,11 @@ export const api = {
     verifyDns: (id: string): Promise<DnsStatus> =>
       fetch(`/api/domains/${id}/verify-dns`, { method: "POST" }).then((r) =>
         handleResponse<DnsStatus>(r),
+      ),
+
+    verifySsl: (id: string): Promise<SslStatus> =>
+      fetch(`/api/domains/${id}/verify-ssl`, { method: "POST" }).then((r) =>
+        handleResponse<SslStatus>(r),
       ),
   },
 

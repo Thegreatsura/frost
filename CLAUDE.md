@@ -104,6 +104,7 @@ Types in `src/lib/db-types.ts` are auto-generated. Never modify manually.
 - Page-specific components in `_components/` folder next to page.tsx
 - Shared components in `src/components/`
 - When unsure about design decisions, do web searches to see how Vercel/Cloud Run handle it
+- React Query mutations: use `await queryClient.refetchQueries()` in onSuccess, not `invalidateQueries()` (invalidate marks stale but doesn't guarantee immediate refetch)
 
 ## Git Conventions
 
