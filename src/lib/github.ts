@@ -6,10 +6,10 @@ const GITHUB_API = "https://api.github.com";
 
 export interface GitHubInstallation {
   id: string;
-  installation_id: string;
-  account_login: string;
-  account_type: string;
-  created_at: number;
+  installationId: string;
+  accountLogin: string;
+  accountType: string;
+  createdAt: number;
 }
 
 export interface GitHubAppCredentials {
@@ -67,9 +67,9 @@ export async function hasGitHubApp(): Promise<boolean> {
 
 export async function getInstallations(): Promise<GitHubInstallation[]> {
   const rows = await db
-    .selectFrom("github_installations")
+    .selectFrom("githubInstallations")
     .selectAll()
-    .orderBy("created_at", "desc")
+    .orderBy("createdAt", "desc")
     .execute();
   return rows;
 }
@@ -78,9 +78,9 @@ export async function getInstallationByAccount(
   accountLogin: string,
 ): Promise<GitHubInstallation | null> {
   const row = await db
-    .selectFrom("github_installations")
+    .selectFrom("githubInstallations")
     .selectAll()
-    .where("account_login", "=", accountLogin)
+    .where("accountLogin", "=", accountLogin)
     .executeTakeFirst();
   return row ?? null;
 }
@@ -91,29 +91,29 @@ export async function saveInstallation(installation: {
   accountType: string;
 }): Promise<void> {
   const existing = await db
-    .selectFrom("github_installations")
+    .selectFrom("githubInstallations")
     .selectAll()
-    .where("installation_id", "=", installation.installationId)
+    .where("installationId", "=", installation.installationId)
     .executeTakeFirst();
 
   if (existing) {
     await db
-      .updateTable("github_installations")
+      .updateTable("githubInstallations")
       .set({
-        account_login: installation.accountLogin,
-        account_type: installation.accountType,
+        accountLogin: installation.accountLogin,
+        accountType: installation.accountType,
       })
-      .where("installation_id", "=", installation.installationId)
+      .where("installationId", "=", installation.installationId)
       .execute();
   } else {
     await db
-      .insertInto("github_installations")
+      .insertInto("githubInstallations")
       .values({
         id: randomUUID(),
-        installation_id: installation.installationId,
-        account_login: installation.accountLogin,
-        account_type: installation.accountType,
-        created_at: Date.now(),
+        installationId: installation.installationId,
+        accountLogin: installation.accountLogin,
+        accountType: installation.accountType,
+        createdAt: Date.now(),
       })
       .execute();
   }
@@ -123,8 +123,8 @@ export async function deleteInstallation(
   installationId: string,
 ): Promise<void> {
   await db
-    .deleteFrom("github_installations")
-    .where("installation_id", "=", installationId)
+    .deleteFrom("githubInstallations")
+    .where("installationId", "=", installationId)
     .execute();
 }
 
@@ -166,7 +166,7 @@ export async function clearGitHubAppCredentials(): Promise<void> {
   for (const key of keys) {
     await setSetting(key, "");
   }
-  await db.deleteFrom("github_installations").execute();
+  await db.deleteFrom("githubInstallations").execute();
 }
 
 export async function fetchInstallationInfo(installationId: string): Promise<{
@@ -236,14 +236,14 @@ async function findInstallationId(repoUrl?: string): Promise<string> {
     const account = extractAccountFromRepoUrl(repoUrl);
     if (account) {
       const installation = installations.find(
-        (i) => i.account_login.toLowerCase() === account.toLowerCase(),
+        (i) => i.accountLogin.toLowerCase() === account.toLowerCase(),
       );
-      if (installation) return installation.installation_id;
+      if (installation) return installation.installationId;
     }
   }
 
   if (installations.length > 0) {
-    return installations[0].installation_id;
+    return installations[0].installationId;
   }
 
   if (creds?.installationId) {

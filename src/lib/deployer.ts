@@ -45,11 +45,11 @@ async function updateDeployment(
   id: string,
   updates: {
     status?: DeploymentStatus;
-    build_log?: string;
-    error_message?: string;
-    container_id?: string;
-    host_port?: number;
-    finished_at?: number;
+    buildLog?: string;
+    errorMessage?: string;
+    containerId?: string;
+    hostPort?: number;
+    finishedAt?: number;
   },
 ) {
   await db
@@ -62,12 +62,12 @@ async function updateDeployment(
 async function appendLog(id: string, log: string) {
   const deployment = await db
     .selectFrom("deployments")
-    .select("build_log")
+    .select("buildLog")
     .where("id", "=", id)
     .executeTakeFirst();
 
-  const existingLog = deployment?.build_log || "";
-  await updateDeployment(id, { build_log: existingLog + log });
+  const existingLog = deployment?.buildLog || "";
+  await updateDeployment(id, { buildLog: existingLog + log });
 }
 
 function parseEnvVars(envVarsJson: string): Record<string, string> {
@@ -83,7 +83,7 @@ export async function deployProject(projectId: string): Promise<string[]> {
   const services = await db
     .selectFrom("services")
     .selectAll()
-    .where("project_id", "=", projectId)
+    .where("projectId", "=", projectId)
     .execute();
 
   if (services.length === 0) {
@@ -111,7 +111,7 @@ export async function deployService(serviceId: string): Promise<string> {
   const project = await db
     .selectFrom("projects")
     .selectAll()
-    .where("id", "=", service.project_id)
+    .where("id", "=", service.projectId)
     .executeTakeFirst();
 
   if (!project) {
@@ -125,11 +125,11 @@ export async function deployService(serviceId: string): Promise<string> {
     .insertInto("deployments")
     .values({
       id: deploymentId,
-      project_id: project.id,
-      service_id: serviceId,
-      commit_sha: "HEAD",
+      projectId: project.id,
+      serviceId: serviceId,
+      commitSha: "HEAD",
       status: "pending",
-      created_at: now,
+      createdAt: now,
     })
     .execute();
 
@@ -155,8 +155,8 @@ async function runServiceDeployment(
     "frost.service.name": service.name,
   };
 
-  const projectEnvVars = parseEnvVars(project.env_vars);
-  const serviceEnvVars = parseEnvVars(service.env_vars);
+  const projectEnvVars = parseEnvVars(project.envVars);
+  const serviceEnvVars = parseEnvVars(service.envVars);
   const envVars = { ...projectEnvVars, ...serviceEnvVars };
   const envVarsList: EnvVar[] = Object.entries(envVars).map(([key, value]) => ({
     key,
@@ -166,11 +166,11 @@ async function runServiceDeployment(
   try {
     let imageName: string;
 
-    if (service.deploy_type === "image") {
-      if (!service.image_url) {
+    if (service.deployType === "image") {
+      if (!service.imageUrl) {
         throw new Error("Image URL is required for image deployments");
       }
-      imageName = service.image_url;
+      imageName = service.imageUrl;
       const imageTag = imageName.split(":")[1] || "latest";
 
       await updateDeployment(deploymentId, { status: "pulling" });
@@ -185,28 +185,28 @@ async function runServiceDeployment(
 
       await db
         .updateTable("deployments")
-        .set({ commit_sha: imageTag })
+        .set({ commitSha: imageTag })
         .where("id", "=", deploymentId)
         .execute();
     } else {
-      if (!service.repo_url || !service.branch || !service.dockerfile_path) {
+      if (!service.repoUrl || !service.branch || !service.dockerfilePath) {
         throw new Error("Repo URL, branch, and Dockerfile path are required");
       }
 
       const repoPath = join(REPOS_PATH, service.id);
 
       await updateDeployment(deploymentId, { status: "cloning" });
-      await appendLog(deploymentId, `Cloning ${service.repo_url}...\n`);
+      await appendLog(deploymentId, `Cloning ${service.repoUrl}...\n`);
 
       if (existsSync(repoPath)) {
         rmSync(repoPath, { recursive: true, force: true });
       }
 
-      let cloneUrl = service.repo_url;
-      if (isGitHubRepo(service.repo_url) && (await hasGitHubApp())) {
+      let cloneUrl = service.repoUrl;
+      if (isGitHubRepo(service.repoUrl) && (await hasGitHubApp())) {
         try {
-          const token = await generateInstallationToken(service.repo_url);
-          cloneUrl = injectTokenIntoUrl(service.repo_url, token);
+          const token = await generateInstallationToken(service.repoUrl);
+          cloneUrl = injectTokenIntoUrl(service.repoUrl, token);
           await appendLog(
             deploymentId,
             "Using GitHub App for authentication\n",
@@ -231,7 +231,7 @@ async function runServiceDeployment(
 
       await db
         .updateTable("deployments")
-        .set({ commit_sha: commitSha })
+        .set({ commitSha: commitSha })
         .where("id", "=", deploymentId)
         .execute();
 
@@ -254,7 +254,7 @@ async function runServiceDeployment(
       const buildResult = await buildImage({
         repoPath,
         imageName,
-        dockerfilePath: service.dockerfile_path,
+        dockerfilePath: service.dockerfilePath,
         envVars,
         labels: baseLabels,
       });
@@ -275,7 +275,7 @@ async function runServiceDeployment(
     const runResult = await runContainer({
       imageName,
       hostPort,
-      containerPort: service.container_port ?? undefined,
+      containerPort: service.containerPort ?? undefined,
       name: containerName,
       envVars,
       network: networkName,
@@ -294,8 +294,8 @@ async function runServiceDeployment(
       deploymentId,
       `Container started: ${runResult.containerId.substring(0, 12)}\n`,
     );
-    const healthCheckType = service.health_check_path
-      ? `HTTP ${service.health_check_path}`
+    const healthCheckType = service.healthCheckPath
+      ? `HTTP ${service.healthCheckPath}`
       : "TCP";
     await appendLog(
       deploymentId,
@@ -305,8 +305,8 @@ async function runServiceDeployment(
     const isHealthy = await waitForHealthy({
       containerId: runResult.containerId,
       port: hostPort,
-      path: service.health_check_path,
-      timeoutSeconds: service.health_check_timeout ?? 60,
+      path: service.healthCheckPath,
+      timeoutSeconds: service.healthCheckTimeout ?? 60,
     });
     if (!isHealthy) {
       throw new Error("Container failed health check");
@@ -314,9 +314,9 @@ async function runServiceDeployment(
 
     await updateDeployment(deploymentId, {
       status: "running",
-      container_id: runResult.containerId,
-      host_port: hostPort,
-      finished_at: Date.now(),
+      containerId: runResult.containerId,
+      hostPort: hostPort,
+      finishedAt: Date.now(),
     });
 
     await appendLog(
@@ -336,19 +336,19 @@ async function runServiceDeployment(
 
     const previousDeployments = await db
       .selectFrom("deployments")
-      .select(["id", "container_id"])
-      .where("service_id", "=", service.id)
+      .select(["id", "containerId"])
+      .where("serviceId", "=", service.id)
       .where("id", "!=", deploymentId)
       .where("status", "=", "running")
       .execute();
 
     for (const prev of previousDeployments) {
-      if (prev.container_id) {
-        await stopContainer(prev.container_id);
+      if (prev.containerId) {
+        await stopContainer(prev.containerId);
       }
       await db
         .updateTable("deployments")
-        .set({ status: "failed", finished_at: Date.now() })
+        .set({ status: "failed", finishedAt: Date.now() })
         .where("id", "=", prev.id)
         .execute();
     }
@@ -356,8 +356,8 @@ async function runServiceDeployment(
     const errorMessage = err.message || "Unknown error";
     await updateDeployment(deploymentId, {
       status: "failed",
-      error_message: errorMessage,
-      finished_at: Date.now(),
+      errorMessage: errorMessage,
+      finishedAt: Date.now(),
     });
     await appendLog(deploymentId, `\nError: ${errorMessage}\n`);
   }

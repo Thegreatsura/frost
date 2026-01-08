@@ -23,66 +23,66 @@ export type JsonValue = JsonPrimitive | JsonObject | JsonArray;
 export interface Migration {
   id: Generated<number>;
   name: string;
-  applied_at: number;
+  appliedAt: number;
 }
 
 export interface Deployment {
   id: string;
-  project_id: string;
-  service_id: string;
-  commit_sha: string;
-  commit_message: string | null;
+  projectId: string;
+  serviceId: string;
+  commitSha: string;
+  commitMessage: string | null;
   status: Generated<string>;
-  container_id: string | null;
-  host_port: number | null;
-  build_log: string | null;
-  error_message: string | null;
-  created_at: number;
-  finished_at: number | null;
+  containerId: string | null;
+  hostPort: number | null;
+  buildLog: string | null;
+  errorMessage: string | null;
+  createdAt: number;
+  finishedAt: number | null;
 }
 
 export interface Domain {
   id: string;
-  service_id: string;
+  serviceId: string;
   domain: string;
   'type': Generated<string>;
-  redirect_target: string | null;
-  redirect_code: Generated<number | null>;
-  dns_verified: Generated<number | null>;
-  ssl_status: Generated<string | null>;
-  created_at: number;
-  is_system: Generated<number | null>;
+  redirectTarget: string | null;
+  redirectCode: Generated<number | null>;
+  dnsVerified: Generated<number | null>;
+  sslStatus: Generated<string | null>;
+  createdAt: number;
+  isSystem: Generated<number | null>;
 }
 
 export interface GithubInstallation {
   id: string;
-  installation_id: string;
-  account_login: string;
-  account_type: Generated<string>;
-  created_at: number;
+  installationId: string;
+  accountLogin: string;
+  accountType: Generated<string>;
+  createdAt: number;
 }
 
 export interface Project {
   id: string;
   name: string;
-  env_vars: Generated<string>;
-  created_at: number;
+  envVars: Generated<string>;
+  createdAt: number;
 }
 
 export interface Service {
   id: string;
-  project_id: string;
+  projectId: string;
   name: string;
-  deploy_type: Generated<string>;
-  repo_url: string | null;
+  deployType: Generated<string>;
+  repoUrl: string | null;
   branch: Generated<string | null>;
-  dockerfile_path: Generated<string | null>;
-  image_url: string | null;
-  env_vars: Generated<string>;
-  created_at: number;
-  container_port: Generated<number | null>;
-  health_check_path: Generated<string | null>;
-  health_check_timeout: Generated<number | null>;
+  dockerfilePath: Generated<string | null>;
+  imageUrl: string | null;
+  envVars: Generated<string>;
+  createdAt: number;
+  containerPort: Generated<number | null>;
+  healthCheckPath: Generated<string | null>;
+  healthCheckTimeout: Generated<number | null>;
 }
 
 export interface Setting {
@@ -91,10 +91,10 @@ export interface Setting {
 }
 
 export interface DB {
-  _migrations: Migration;
+  _Migrations: Migration;
   deployments: Deployment;
   domains: Domain;
-  github_installations: GithubInstallation;
+  githubInstallations: GithubInstallation;
   projects: Project;
   services: Service;
   settings: Setting;

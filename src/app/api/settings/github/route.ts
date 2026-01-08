@@ -21,8 +21,8 @@ export async function GET() {
     appSlug: creds?.slug || null,
     installations: installations.map((i) => ({
       id: i.id,
-      accountLogin: i.account_login,
-      accountType: i.account_type,
+      accountLogin: i.accountLogin,
+      accountType: i.accountType,
     })),
   });
 }

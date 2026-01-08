@@ -49,7 +49,7 @@ export async function PATCH(
 
   const updated = await updateDomain(id, updates);
 
-  if (domain.dns_verified) {
+  if (domain.dnsVerified) {
     try {
       await syncCaddyConfig();
     } catch {}
@@ -70,18 +70,21 @@ export async function DELETE(
     return NextResponse.json({ error: "Domain not found" }, { status: 404 });
   }
 
-  if (domain.is_system === 1) {
+  if (domain.isSystem === 1) {
     const otherVerifiedDomains = await db
       .selectFrom("domains")
       .select("id")
-      .where("service_id", "=", domain.service_id)
+      .where("serviceId", "=", domain.serviceId)
       .where("id", "!=", id)
-      .where("dns_verified", "=", 1)
+      .where("dnsVerified", "=", 1)
       .execute();
 
     if (otherVerifiedDomains.length === 0) {
       return NextResponse.json(
-        { error: "Cannot delete system domain when no other verified domain exists" },
+        {
+          error:
+            "Cannot delete system domain when no other verified domain exists",
+        },
         { status: 400 },
       );
     }
@@ -89,7 +92,7 @@ export async function DELETE(
 
   await removeDomain(id);
 
-  if (domain.dns_verified) {
+  if (domain.dnsVerified) {
     try {
       await syncCaddyConfig();
     } catch {}

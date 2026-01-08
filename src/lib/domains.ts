@@ -30,14 +30,14 @@ export async function addDomain(serviceId: string, input: DomainInput) {
     .insertInto("domains")
     .values({
       id,
-      service_id: serviceId,
+      serviceId: serviceId,
       domain: domain.toLowerCase(),
       type,
-      redirect_target: type === "redirect" ? redirectTarget : null,
-      redirect_code: type === "redirect" ? redirectCode : null,
-      dns_verified: 0,
-      ssl_status: "pending",
-      created_at: now,
+      redirectTarget: type === "redirect" ? redirectTarget : null,
+      redirectCode: type === "redirect" ? redirectCode : null,
+      dnsVerified: 0,
+      sslStatus: "pending",
+      createdAt: now,
     })
     .execute();
 
@@ -64,8 +64,8 @@ export async function getDomainsForService(serviceId: string) {
   return db
     .selectFrom("domains")
     .selectAll()
-    .where("service_id", "=", serviceId)
-    .orderBy("created_at", "desc")
+    .where("serviceId", "=", serviceId)
+    .orderBy("createdAt", "desc")
     .execute();
 }
 
@@ -83,12 +83,12 @@ export async function updateDomain(
 
   if (updates.type !== undefined) setValues.type = updates.type;
   if (updates.redirectTarget !== undefined)
-    setValues.redirect_target = updates.redirectTarget;
+    setValues.redirectTarget = updates.redirectTarget;
   if (updates.redirectCode !== undefined)
-    setValues.redirect_code = updates.redirectCode;
+    setValues.redirectCode = updates.redirectCode;
   if (updates.dnsVerified !== undefined)
-    setValues.dns_verified = updates.dnsVerified ? 1 : 0;
-  if (updates.sslStatus !== undefined) setValues.ssl_status = updates.sslStatus;
+    setValues.dnsVerified = updates.dnsVerified ? 1 : 0;
+  if (updates.sslStatus !== undefined) setValues.sslStatus = updates.sslStatus;
 
   if (Object.keys(setValues).length === 0) return getDomain(id);
 
@@ -126,8 +126,8 @@ export async function getSystemDomainForService(serviceId: string) {
   const domain = await db
     .selectFrom("domains")
     .selectAll()
-    .where("service_id", "=", serviceId)
-    .where("is_system", "=", 1)
+    .where("serviceId", "=", serviceId)
+    .where("isSystem", "=", 1)
     .executeTakeFirst();
   return domain ?? null;
 }
@@ -162,7 +162,9 @@ export async function createSystemDomain(
   }
 
   if (!domain) {
-    console.error("Could not generate unique sslip.io domain after 10 attempts");
+    console.error(
+      "Could not generate unique sslip.io domain after 10 attempts",
+    );
     return;
   }
 
@@ -173,15 +175,15 @@ export async function createSystemDomain(
     .insertInto("domains")
     .values({
       id,
-      service_id: serviceId,
+      serviceId: serviceId,
       domain,
       type: "proxy",
-      redirect_target: null,
-      redirect_code: null,
-      dns_verified: 1,
-      ssl_status: "pending",
-      created_at: now,
-      is_system: 1,
+      redirectTarget: null,
+      redirectCode: null,
+      dnsVerified: 1,
+      sslStatus: "pending",
+      createdAt: now,
+      isSystem: 1,
     })
     .execute();
 
@@ -221,7 +223,9 @@ export async function updateSystemDomain(
   }
 
   if (!domain) {
-    console.error("Could not generate unique sslip.io domain after 10 attempts");
+    console.error(
+      "Could not generate unique sslip.io domain after 10 attempts",
+    );
     return;
   }
 
@@ -384,20 +388,20 @@ export async function syncCaddyConfig() {
 
   const verifiedDomains = await db
     .selectFrom("domains")
-    .innerJoin("services", "services.id", "domains.service_id")
+    .innerJoin("services", "services.id", "domains.serviceId")
     .innerJoin("deployments", (join) =>
       join
-        .onRef("deployments.service_id", "=", "services.id")
+        .onRef("deployments.serviceId", "=", "services.id")
         .on("deployments.status", "=", "running"),
     )
     .select([
       "domains.domain",
       "domains.type",
-      "domains.redirect_target",
-      "domains.redirect_code",
-      "deployments.host_port",
+      "domains.redirectTarget",
+      "domains.redirectCode",
+      "deployments.hostPort",
     ])
-    .where("domains.dns_verified", "=", 1)
+    .where("domains.dnsVerified", "=", 1)
     .execute();
 
   const routes: DomainRoute[] = [];
@@ -410,18 +414,18 @@ export async function syncCaddyConfig() {
   }
 
   for (const d of verifiedDomains) {
-    if (d.type === "proxy" && d.host_port) {
+    if (d.type === "proxy" && d.hostPort) {
       routes.push({
         domain: d.domain,
         type: "proxy",
-        hostPort: d.host_port,
+        hostPort: d.hostPort,
       });
-    } else if (d.type === "redirect" && d.redirect_target) {
+    } else if (d.type === "redirect" && d.redirectTarget) {
       routes.push({
         domain: d.domain,
         type: "redirect",
-        redirectTarget: d.redirect_target,
-        redirectCode: d.redirect_code || 301,
+        redirectTarget: d.redirectTarget,
+        redirectCode: d.redirectCode || 301,
       });
     }
   }

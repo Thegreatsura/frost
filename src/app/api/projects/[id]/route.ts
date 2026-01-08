@@ -22,7 +22,7 @@ export async function GET(
   const services = await db
     .selectFrom("services")
     .selectAll()
-    .where("project_id", "=", id)
+    .where("projectId", "=", id)
     .execute();
 
   const servicesWithDeployments = await Promise.all(
@@ -30,8 +30,8 @@ export async function GET(
       const latestDeployment = await db
         .selectFrom("deployments")
         .selectAll()
-        .where("service_id", "=", service.id)
-        .orderBy("created_at", "desc")
+        .where("serviceId", "=", service.id)
+        .orderBy("createdAt", "desc")
         .limit(1)
         .executeTakeFirst();
 
@@ -66,8 +66,8 @@ export async function PATCH(
   if (body.name !== undefined) {
     updates.name = body.name;
   }
-  if (body.env_vars !== undefined) {
-    updates.env_vars = JSON.stringify(body.env_vars);
+  if (body.envVars !== undefined) {
+    updates.envVars = JSON.stringify(body.envVars);
   }
 
   if (Object.keys(updates).length > 0) {
@@ -82,7 +82,7 @@ export async function PATCH(
     const services = await db
       .selectFrom("services")
       .select(["id", "name"])
-      .where("project_id", "=", id)
+      .where("projectId", "=", id)
       .execute();
     for (const svc of services) {
       await updateSystemDomain(svc.id, svc.name, body.name);
@@ -106,13 +106,13 @@ export async function DELETE(
 
   const deployments = await db
     .selectFrom("deployments")
-    .select("container_id")
-    .where("project_id", "=", id)
+    .select("containerId")
+    .where("projectId", "=", id)
     .execute();
 
   for (const deployment of deployments) {
-    if (deployment.container_id) {
-      await stopContainer(deployment.container_id);
+    if (deployment.containerId) {
+      await stopContainer(deployment.containerId);
     }
   }
 

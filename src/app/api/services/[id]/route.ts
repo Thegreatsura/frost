@@ -22,8 +22,8 @@ export async function GET(
   const latestDeployment = await db
     .selectFrom("deployments")
     .selectAll()
-    .where("service_id", "=", id)
-    .orderBy("created_at", "desc")
+    .where("serviceId", "=", id)
+    .orderBy("createdAt", "desc")
     .limit(1)
     .executeTakeFirst();
 
@@ -51,45 +51,45 @@ export async function PATCH(
   if (body.name !== undefined) {
     updates.name = body.name;
   }
-  if (body.env_vars !== undefined) {
-    updates.env_vars = JSON.stringify(body.env_vars);
+  if (body.envVars !== undefined) {
+    updates.envVars = JSON.stringify(body.envVars);
   }
-  if (body.container_port !== undefined) {
-    if (body.container_port < 1 || body.container_port > 65535) {
+  if (body.containerPort !== undefined) {
+    if (body.containerPort < 1 || body.containerPort > 65535) {
       return NextResponse.json(
-        { error: "container_port must be between 1 and 65535" },
+        { error: "containerPort must be between 1 and 65535" },
         { status: 400 },
       );
     }
-    updates.container_port = body.container_port;
+    updates.containerPort = body.containerPort;
   }
-  if (service.deploy_type === "repo") {
+  if (service.deployType === "repo") {
     if (body.branch !== undefined) {
       updates.branch = body.branch;
     }
-    if (body.dockerfile_path !== undefined) {
-      updates.dockerfile_path = body.dockerfile_path;
+    if (body.dockerfilePath !== undefined) {
+      updates.dockerfilePath = body.dockerfilePath;
     }
-    if (body.repo_url !== undefined) {
-      updates.repo_url = body.repo_url;
-    }
-  }
-  if (service.deploy_type === "image") {
-    if (body.image_url !== undefined) {
-      updates.image_url = body.image_url;
+    if (body.repoUrl !== undefined) {
+      updates.repoUrl = body.repoUrl;
     }
   }
-  if (body.health_check_path !== undefined) {
-    updates.health_check_path = body.health_check_path;
+  if (service.deployType === "image") {
+    if (body.imageUrl !== undefined) {
+      updates.imageUrl = body.imageUrl;
+    }
   }
-  if (body.health_check_timeout !== undefined) {
-    if (body.health_check_timeout < 1 || body.health_check_timeout > 300) {
+  if (body.healthCheckPath !== undefined) {
+    updates.healthCheckPath = body.healthCheckPath;
+  }
+  if (body.healthCheckTimeout !== undefined) {
+    if (body.healthCheckTimeout < 1 || body.healthCheckTimeout > 300) {
       return NextResponse.json(
-        { error: "health_check_timeout must be between 1 and 300" },
+        { error: "healthCheckTimeout must be between 1 and 300" },
         { status: 400 },
       );
     }
-    updates.health_check_timeout = body.health_check_timeout;
+    updates.healthCheckTimeout = body.healthCheckTimeout;
   }
 
   if (Object.keys(updates).length > 0) {
@@ -104,7 +104,7 @@ export async function PATCH(
     const project = await db
       .selectFrom("projects")
       .select("name")
-      .where("id", "=", service.project_id)
+      .where("id", "=", service.projectId)
       .executeTakeFirst();
     if (project) {
       await updateSystemDomain(id, body.name, project.name);
@@ -128,13 +128,13 @@ export async function DELETE(
 
   const deployments = await db
     .selectFrom("deployments")
-    .select("container_id")
-    .where("service_id", "=", id)
+    .select("containerId")
+    .where("serviceId", "=", id)
     .execute();
 
   for (const deployment of deployments) {
-    if (deployment.container_id) {
-      await stopContainer(deployment.container_id);
+    if (deployment.containerId) {
+      await stopContainer(deployment.containerId);
     }
   }
 

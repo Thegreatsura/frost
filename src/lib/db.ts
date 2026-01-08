@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { CompiledQuery, Kysely } from "kysely";
+import { CamelCasePlugin, CompiledQuery, Kysely } from "kysely";
 import { BunSqliteDialect } from "kysely-bun-worker/normal";
 import type { DB } from "./db-types";
 
@@ -18,4 +18,5 @@ export const db = new Kysely<DB>({
       await conn.executeQuery(CompiledQuery.raw("PRAGMA foreign_keys = ON"));
     },
   }),
+  plugins: [new CamelCasePlugin()],
 });

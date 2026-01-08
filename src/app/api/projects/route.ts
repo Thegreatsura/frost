@@ -14,38 +14,38 @@ export async function GET() {
       const services = await db
         .selectFrom("services")
         .selectAll()
-        .where("project_id", "=", project.id)
+        .where("projectId", "=", project.id)
         .execute();
 
       const latestDeployment = await db
         .selectFrom("deployments")
-        .innerJoin("services", "services.id", "deployments.service_id")
+        .innerJoin("services", "services.id", "deployments.serviceId")
         .select([
           "deployments.status",
-          "deployments.commit_message",
-          "deployments.created_at",
+          "deployments.commitMessage",
+          "deployments.createdAt",
           "services.branch",
         ])
-        .where("deployments.project_id", "=", project.id)
-        .orderBy("deployments.created_at", "desc")
+        .where("deployments.projectId", "=", project.id)
+        .orderBy("deployments.createdAt", "desc")
         .executeTakeFirst();
 
       const runningDeployment = await db
         .selectFrom("deployments")
-        .select(["host_port"])
-        .where("project_id", "=", project.id)
+        .select(["hostPort"])
+        .where("projectId", "=", project.id)
         .where("status", "=", "running")
-        .where("host_port", "is not", null)
+        .where("hostPort", "is not", null)
         .executeTakeFirst();
 
       const firstService = services[0];
-      const repoUrl = firstService?.repo_url ?? null;
+      const repoUrl = firstService?.repoUrl ?? null;
 
       let runningUrl: string | null = null;
-      if (runningDeployment?.host_port) {
+      if (runningDeployment?.hostPort) {
         runningUrl = domain
-          ? `${domain}:${runningDeployment.host_port}`
-          : `localhost:${runningDeployment.host_port}`;
+          ? `${domain}:${runningDeployment.hostPort}`
+          : `localhost:${runningDeployment.hostPort}`;
       }
 
       return {
@@ -54,8 +54,8 @@ export async function GET() {
         latestDeployment: latestDeployment
           ? {
               status: latestDeployment.status,
-              commit_message: latestDeployment.commit_message,
-              created_at: latestDeployment.created_at,
+              commitMessage: latestDeployment.commitMessage,
+              createdAt: latestDeployment.createdAt,
               branch: latestDeployment.branch,
             }
           : null,
@@ -70,7 +70,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const body = await request.json();
-  const { name, env_vars = [] } = body;
+  const { name, envVars = [] } = body;
 
   if (!name) {
     return NextResponse.json({ error: "name is required" }, { status: 400 });
@@ -84,8 +84,8 @@ export async function POST(request: Request) {
     .values({
       id,
       name,
-      env_vars: JSON.stringify(env_vars),
-      created_at: now,
+      envVars: JSON.stringify(envVars),
+      createdAt: now,
     })
     .execute();
 

@@ -11,11 +11,11 @@ export async function GET(
 
   const deployment = await db
     .selectFrom("deployments")
-    .select(["container_id", "status"])
+    .select(["containerId", "status"])
     .where("id", "=", id)
     .executeTakeFirst();
 
-  if (!deployment || !deployment.container_id) {
+  if (!deployment || !deployment.containerId) {
     return new Response("Container not found", { status: 404 });
   }
 
@@ -29,17 +29,21 @@ export async function GET(
 
   const stream = new ReadableStream({
     start(controller) {
-      const { stop } = streamContainerLogs(deployment.container_id!, {
+      const { stop } = streamContainerLogs(deployment.containerId!, {
         tail,
         timestamps: true,
         onData(line) {
           if (stopped) return;
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(line)}\n\n`));
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify(line)}\n\n`),
+          );
         },
         onError(err) {
           if (stopped) return;
           controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ error: err.message })}\n\n`),
+            encoder.encode(
+              `data: ${JSON.stringify({ error: err.message })}\n\n`,
+            ),
           );
           controller.close();
         },
@@ -51,7 +55,7 @@ export async function GET(
 
       stopFn = stop;
 
-      request.signal.addEventListener("abort", function () {
+      request.signal.addEventListener("abort", () => {
         stopped = true;
         if (stopFn) stopFn();
         try {

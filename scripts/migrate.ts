@@ -102,19 +102,17 @@ async function ensureSystemDomains() {
   try {
     serverIp = await getServerIp();
   } catch {
-    console.log("Could not determine server IP, skipping system domain creation");
+    console.log(
+      "Could not determine server IP, skipping system domain creation",
+    );
     return;
   }
   console.log(`Server IP: ${serverIp}`);
 
   const services = await db
     .selectFrom("services")
-    .innerJoin("projects", "projects.id", "services.project_id")
-    .select([
-      "services.id",
-      "services.name",
-      "projects.name as project_name",
-    ])
+    .innerJoin("projects", "projects.id", "services.projectId")
+    .select(["services.id", "services.name", "projects.name as project_name"])
     .execute();
 
   let created = 0;

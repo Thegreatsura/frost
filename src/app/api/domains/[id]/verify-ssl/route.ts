@@ -45,11 +45,11 @@ export async function POST(
     return NextResponse.json({ error: "Domain not found" }, { status: 404 });
   }
 
-  if (!domain.dns_verified) {
+  if (!domain.dnsVerified) {
     return NextResponse.json({ error: "DNS not verified" }, { status: 400 });
   }
 
-  if (domain.ssl_status === "active") {
+  if (domain.sslStatus === "active") {
     return NextResponse.json({ working: true, status: "active" });
   }
 

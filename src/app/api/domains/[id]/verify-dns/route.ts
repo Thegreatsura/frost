@@ -21,7 +21,7 @@ export async function POST(
   try {
     const dnsStatus = await verifyDomainDns(domain.domain);
 
-    if (dnsStatus.valid && !domain.dns_verified) {
+    if (dnsStatus.valid && !domain.dnsVerified) {
       await updateDomain(id, { dnsVerified: true });
 
       try {

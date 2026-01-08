@@ -12,7 +12,7 @@ export async function GET(
   const services = await db
     .selectFrom("services")
     .selectAll()
-    .where("project_id", "=", id)
+    .where("projectId", "=", id)
     .execute();
 
   const servicesWithDeployments = await Promise.all(
@@ -20,8 +20,8 @@ export async function GET(
       const latestDeployment = await db
         .selectFrom("deployments")
         .selectAll()
-        .where("service_id", "=", service.id)
-        .orderBy("created_at", "desc")
+        .where("serviceId", "=", service.id)
+        .orderBy("createdAt", "desc")
         .limit(1)
         .executeTakeFirst();
 
@@ -43,39 +43,39 @@ export async function POST(
   const body = await request.json();
   const {
     name,
-    deploy_type = "repo",
-    repo_url,
+    deployType = "repo",
+    repoUrl,
     branch = "main",
-    dockerfile_path = "Dockerfile",
-    image_url,
-    env_vars = [],
-    container_port,
+    dockerfilePath = "Dockerfile",
+    imageUrl,
+    envVars = [],
+    containerPort,
   } = body;
 
   if (!name) {
     return NextResponse.json({ error: "name is required" }, { status: 400 });
   }
 
-  if (deploy_type === "repo" && !repo_url) {
+  if (deployType === "repo" && !repoUrl) {
     return NextResponse.json(
-      { error: "repo_url is required for repo deployments" },
+      { error: "repoUrl is required for repo deployments" },
       { status: 400 },
     );
   }
 
-  if (deploy_type === "image" && !image_url) {
+  if (deployType === "image" && !imageUrl) {
     return NextResponse.json(
-      { error: "image_url is required for image deployments" },
+      { error: "imageUrl is required for image deployments" },
       { status: 400 },
     );
   }
 
   if (
-    container_port !== undefined &&
-    (container_port < 1 || container_port > 65535)
+    containerPort !== undefined &&
+    (containerPort < 1 || containerPort > 65535)
   ) {
     return NextResponse.json(
-      { error: "container_port must be between 1 and 65535" },
+      { error: "containerPort must be between 1 and 65535" },
       { status: 400 },
     );
   }
@@ -93,7 +93,7 @@ export async function POST(
   const existing = await db
     .selectFrom("services")
     .select("id")
-    .where("project_id", "=", projectId)
+    .where("projectId", "=", projectId)
     .where("name", "=", name)
     .executeTakeFirst();
 
@@ -111,16 +111,16 @@ export async function POST(
     .insertInto("services")
     .values({
       id,
-      project_id: projectId,
+      projectId: projectId,
       name,
-      deploy_type,
-      repo_url: deploy_type === "repo" ? repo_url : null,
-      branch: deploy_type === "repo" ? branch : null,
-      dockerfile_path: deploy_type === "repo" ? dockerfile_path : null,
-      image_url: deploy_type === "image" ? image_url : null,
-      env_vars: JSON.stringify(env_vars),
-      container_port: container_port ?? null,
-      created_at: now,
+      deployType,
+      repoUrl: deployType === "repo" ? repoUrl : null,
+      branch: deployType === "repo" ? branch : null,
+      dockerfilePath: deployType === "repo" ? dockerfilePath : null,
+      imageUrl: deployType === "image" ? imageUrl : null,
+      envVars: JSON.stringify(envVars),
+      containerPort: containerPort ?? null,
+      createdAt: now,
     })
     .execute();
 

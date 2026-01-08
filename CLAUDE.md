@@ -86,6 +86,8 @@ Tables: `projects`, `services`, `deployments`, `domains`, `settings`
 
 Types in `src/lib/db-types.ts` are auto-generated. Never modify manually.
 
+**CamelCasePlugin**: Kysely uses CamelCasePlugin to auto-convert between camelCase (TypeScript) and snake_case (database). In TypeScript code, use camelCase (`projectId`, `createdAt`). Raw SQL queries must use snake_case (`project_id`, `created_at`).
+
 ## Deploy flow
 1. Clone repo (repo type) or pull image (image type)
 2. Docker build with merged env vars (project + service)

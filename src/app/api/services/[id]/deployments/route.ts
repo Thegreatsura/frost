@@ -10,8 +10,8 @@ export async function GET(
   const deployments = await db
     .selectFrom("deployments")
     .selectAll()
-    .where("service_id", "=", id)
-    .orderBy("created_at", "desc")
+    .where("serviceId", "=", id)
+    .orderBy("createdAt", "desc")
     .limit(20)
     .execute();
 
