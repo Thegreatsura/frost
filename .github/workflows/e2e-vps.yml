@@ -1,0 +1,161 @@
+name: E2E VPS Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  SERVER_ID: 116967072
+  SSH_KEY_ID: 105349175
+  SSH_KEY_NAME: frost-e2e-ci
+
+jobs:
+  e2e-vps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Rebuild server
+        id: rebuild
+        run: |
+          echo "Rebuilding server..."
+          RESPONSE=$(curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.HETZNER_API_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"image":"ubuntu-24.04"}' \
+            "https://api.hetzner.cloud/v1/servers/${{ env.SERVER_ID }}/actions/rebuild")
+
+          ACTION_ID=$(echo "$RESPONSE" | jq -r '.action.id')
+          echo "action_id=$ACTION_ID" >> $GITHUB_OUTPUT
+
+          if [ "$ACTION_ID" = "null" ]; then
+            echo "Failed to rebuild server:"
+            echo "$RESPONSE" | jq
+            exit 1
+          fi
+
+          echo "Rebuild action started: $ACTION_ID"
+
+      - name: Wait for rebuild
+        run: |
+          echo "Waiting for rebuild to complete..."
+          for i in {1..60}; do
+            STATUS=$(curl -s \
+              -H "Authorization: Bearer ${{ secrets.HETZNER_API_TOKEN }}" \
+              "https://api.hetzner.cloud/v1/servers/${{ env.SERVER_ID }}/actions/${{ steps.rebuild.outputs.action_id }}" \
+              | jq -r '.action.status')
+
+            echo "Rebuild status: $STATUS"
+
+            if [ "$STATUS" = "success" ]; then
+              echo "Rebuild complete!"
+              break
+            elif [ "$STATUS" = "error" ]; then
+              echo "Rebuild failed!"
+              exit 1
+            fi
+
+            sleep 5
+          done
+
+      - name: Get server IP
+        id: server
+        run: |
+          SERVER_IP=$(curl -s \
+            -H "Authorization: Bearer ${{ secrets.HETZNER_API_TOKEN }}" \
+            "https://api.hetzner.cloud/v1/servers/${{ env.SERVER_ID }}" \
+            | jq -r '.server.public_net.ipv4.ip')
+
+          echo "ip=$SERVER_IP" >> $GITHUB_OUTPUT
+          echo "Server IP: $SERVER_IP"
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ steps.server.outputs.ip }} >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Wait for SSH
+        run: |
+          echo "Waiting for SSH to become available..."
+          for i in {1..30}; do
+            if ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@${{ steps.server.outputs.ip }} "echo 'SSH ready'" 2>/dev/null; then
+              echo "SSH is ready!"
+              exit 0
+            fi
+            echo "Attempt $i: SSH not ready yet..."
+            sleep 10
+          done
+          echo "SSH failed to become available"
+          exit 1
+
+      - name: Install Frost
+        id: install
+        run: |
+          BRANCH="${{ github.head_ref || github.ref_name }}"
+          REPO="${{ github.repository }}"
+          INSTALL_URL="https://raw.githubusercontent.com/${REPO}/${BRANCH}/install.sh"
+
+          echo "Installing from: $INSTALL_URL"
+
+          OUTPUT=$(ssh root@${{ steps.server.outputs.ip }} "curl -fsSL '$INSTALL_URL' -o /tmp/install.sh && chmod +x /tmp/install.sh && echo '${{ secrets.FROST_TEST_PASSWORD }}' | /tmp/install.sh" 2>&1)
+
+          echo "$OUTPUT"
+
+          API_KEY=$(echo "$OUTPUT" | sed 's/\x1b\[[0-9;]*m//g' | grep "API Key:" | awk '{print $3}')
+
+          if [ -z "$API_KEY" ]; then
+            echo "Failed to extract API key from output"
+            exit 1
+          fi
+
+          echo "api_key=$API_KEY" >> $GITHUB_OUTPUT
+          echo "API key extracted successfully"
+
+      - name: Wait for Frost to start
+        run: |
+          echo "Waiting for Frost to be ready..."
+          for i in {1..12}; do
+            if curl -s -o /dev/null -w "%{http_code}" "http://${{ steps.server.outputs.ip }}/api/health" | grep -q "200"; then
+              echo "Frost is ready!"
+              exit 0
+            fi
+            echo "Attempt $i: Frost not ready yet..."
+            sleep 5
+          done
+          echo "Frost failed to start"
+          ssh root@${{ steps.server.outputs.ip }} "journalctl -u frost --no-pager -n 50" || true
+          exit 1
+
+      - name: Run E2E tests
+        run: |
+          chmod +x ./scripts/e2e-test.sh
+          ./scripts/e2e-test.sh "${{ steps.server.outputs.ip }}" "${{ steps.install.outputs.api_key }}"
+
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          echo "=== Frost service logs ==="
+          ssh root@${{ steps.server.outputs.ip }} "journalctl -u frost --no-pager -n 100" || true
+          echo ""
+          echo "=== Caddy logs ==="
+          ssh root@${{ steps.server.outputs.ip }} "journalctl -u caddy --no-pager -n 50" || true
+          echo ""
+          echo "=== Docker containers ==="
+          ssh root@${{ steps.server.outputs.ip }} "docker ps -a" || true
+
+      - name: Upload logs artifact
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failure-logs
+          path: |
+            /tmp/e2e-*.log
+          retention-days: 7
