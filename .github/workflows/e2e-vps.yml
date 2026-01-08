@@ -33,7 +33,8 @@ jobs:
               "image": "${{ env.SNAPSHOT_ID }}",
               "location": "hel1",
               "ssh_keys": ["${{ env.SSH_KEY_NAME }}"],
-              "start_after_create": true
+              "start_after_create": true,
+              "labels": {"purpose": "frost-e2e"}
             }' \
             "https://api.hetzner.cloud/v1/servers")
 
