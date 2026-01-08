@@ -1,6 +1,7 @@
 import { nanoid } from "nanoid";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { createSystemDomain } from "@/lib/domains";
 
 export async function GET(
   request: Request,
@@ -81,7 +82,7 @@ export async function POST(
 
   const project = await db
     .selectFrom("projects")
-    .select("id")
+    .select(["id", "name"])
     .where("id", "=", projectId)
     .executeTakeFirst();
 
@@ -122,6 +123,8 @@ export async function POST(
       created_at: now,
     })
     .execute();
+
+  await createSystemDomain(id, name, project.name);
 
   const service = await db
     .selectFrom("services")

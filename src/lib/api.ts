@@ -62,6 +62,7 @@ export interface Domain {
   redirect_code: number | null;
   dns_verified: number;
   ssl_status: "pending" | "active" | "failed";
+  is_system: number;
   created_at: number;
 }
 

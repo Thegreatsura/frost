@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { stopContainer } from "@/lib/docker";
-import { syncCaddyConfig } from "@/lib/domains";
+import { syncCaddyConfig, updateSystemDomain } from "@/lib/domains";
 
 export async function GET(
   request: Request,
@@ -98,6 +98,17 @@ export async function PATCH(
       .set(updates)
       .where("id", "=", id)
       .execute();
+  }
+
+  if (body.name !== undefined && body.name !== service.name) {
+    const project = await db
+      .selectFrom("projects")
+      .select("name")
+      .where("id", "=", service.project_id)
+      .executeTakeFirst();
+    if (project) {
+      await updateSystemDomain(id, body.name, project.name);
+    }
   }
 
   const updated = await db

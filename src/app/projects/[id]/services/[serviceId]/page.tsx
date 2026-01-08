@@ -18,7 +18,7 @@ import {
   useService,
   useUpdateService,
 } from "@/hooks/use-services";
-import type { Deployment, EnvVar } from "@/lib/api";
+import type { Deployment, Domain, EnvVar } from "@/lib/api";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { DeploymentRow } from "./_components/deployment-row";
@@ -44,6 +44,7 @@ export default function ServicePage() {
   const [editingEnv, setEditingEnv] = useState(false);
   const [envVars, setEnvVars] = useState<EnvVar[]>([]);
   const [serverIp, setServerIp] = useState<string | null>(null);
+  const [systemDomain, setSystemDomain] = useState<Domain | null>(null);
   const [editingHealth, setEditingHealth] = useState(false);
   const [healthPath, setHealthPath] = useState<string>("");
   const [healthTimeout, setHealthTimeout] = useState<number>(60);
@@ -52,6 +53,14 @@ export default function ServicePage() {
   useEffect(() => {
     api.settings.get().then((s) => setServerIp(s.server_ip));
   }, []);
+
+  useEffect(() => {
+    if (!serviceId) return;
+    api.domains.list(serviceId).then((domains) => {
+      const sys = domains.find((d) => d.is_system === 1);
+      setSystemDomain(sys ?? null);
+    });
+  }, [serviceId]);
 
   useEffect(() => {
     if (!service) return;
@@ -243,12 +252,27 @@ export default function ServicePage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <StatusDot status="running" />
-                    <span className="text-sm text-neutral-300">
-                      Running on port {runningDeployment.host_port}
-                    </span>
+                    {systemDomain ? (
+                      <a
+                        href={`https://${systemDomain.domain}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-mono text-sm text-blue-400 hover:text-blue-300"
+                      >
+                        {systemDomain.domain}
+                      </a>
+                    ) : (
+                      <span className="text-sm text-neutral-300">
+                        Running on port {runningDeployment.host_port}
+                      </span>
+                    )}
                   </div>
                   <a
-                    href={`http://${serverIp || "localhost"}:${runningDeployment.host_port}`}
+                    href={
+                      systemDomain
+                        ? `https://${systemDomain.domain}`
+                        : `http://${serverIp || "localhost"}:${runningDeployment.host_port}`
+                    }
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300"

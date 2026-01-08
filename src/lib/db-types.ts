@@ -51,6 +51,7 @@ export interface Domain {
   dns_verified: Generated<number | null>;
   ssl_status: Generated<string | null>;
   created_at: number;
+  is_system: Generated<number | null>;
 }
 
 export interface GithubInstallation {

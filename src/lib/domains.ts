@@ -101,6 +101,127 @@ export async function removeDomain(id: string) {
   await db.deleteFrom("domains").where("id", "=", id).execute();
 }
 
+function slugify(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-+/g, "-");
+}
+
+function buildSslipDomain(
+  serviceName: string,
+  projectName: string,
+  serverIp: string,
+  suffix?: number,
+): string {
+  const serviceSlug = slugify(serviceName);
+  const projectSlug = slugify(projectName);
+  const base = `${serviceSlug}-${projectSlug}`;
+  const withSuffix = suffix ? `${base}-${suffix}` : base;
+  return `${withSuffix}.${serverIp}.sslip.io`;
+}
+
+export async function getSystemDomainForService(serviceId: string) {
+  const domain = await db
+    .selectFrom("domains")
+    .selectAll()
+    .where("service_id", "=", serviceId)
+    .where("is_system", "=", 1)
+    .executeTakeFirst();
+  return domain ?? null;
+}
+
+export async function createSystemDomain(
+  serviceId: string,
+  serviceName: string,
+  projectName: string,
+): Promise<void> {
+  const serverIp = await getSetting("server_ip");
+  if (!serverIp) return;
+
+  let domain: string | null = null;
+  for (let i = 0; i < 10; i++) {
+    const candidate = buildSslipDomain(
+      serviceName,
+      projectName,
+      serverIp,
+      i === 0 ? undefined : i + 1,
+    );
+    const existing = await getDomainByName(candidate);
+    if (!existing) {
+      domain = candidate;
+      break;
+    }
+  }
+
+  if (!domain) {
+    console.error("Could not generate unique sslip.io domain after 10 attempts");
+    return;
+  }
+
+  const id = nanoid();
+  const now = Date.now();
+
+  await db
+    .insertInto("domains")
+    .values({
+      id,
+      service_id: serviceId,
+      domain,
+      type: "proxy",
+      redirect_target: null,
+      redirect_code: null,
+      dns_verified: 1,
+      ssl_status: "pending",
+      created_at: now,
+      is_system: 1,
+    })
+    .execute();
+
+  await syncCaddyConfig();
+}
+
+export async function updateSystemDomain(
+  serviceId: string,
+  newServiceName: string,
+  newProjectName: string,
+): Promise<void> {
+  const existing = await getSystemDomainForService(serviceId);
+  if (!existing) return;
+
+  const serverIp = await getSetting("server_ip");
+  if (!serverIp) return;
+
+  let domain: string | null = null;
+  for (let i = 0; i < 10; i++) {
+    const candidate = buildSslipDomain(
+      newServiceName,
+      newProjectName,
+      serverIp,
+      i === 0 ? undefined : i + 1,
+    );
+    const existingDomain = await getDomainByName(candidate);
+    if (!existingDomain || existingDomain.id === existing.id) {
+      domain = candidate;
+      break;
+    }
+  }
+
+  if (!domain) {
+    console.error("Could not generate unique sslip.io domain after 10 attempts");
+    return;
+  }
+
+  await db
+    .updateTable("domains")
+    .set({ domain })
+    .where("id", "=", existing.id)
+    .execute();
+
+  await syncCaddyConfig();
+}
+
 export async function getServerIp(): Promise<string> {
   const services = ["https://api.ipify.org", "https://ifconfig.me/ip"];
 

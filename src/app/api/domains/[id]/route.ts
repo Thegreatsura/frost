@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { db } from "@/lib/db";
 import {
   getDomain,
   removeDomain,
@@ -67,6 +68,23 @@ export async function DELETE(
 
   if (!domain) {
     return NextResponse.json({ error: "Domain not found" }, { status: 404 });
+  }
+
+  if (domain.is_system === 1) {
+    const otherVerifiedDomains = await db
+      .selectFrom("domains")
+      .select("id")
+      .where("service_id", "=", domain.service_id)
+      .where("id", "!=", id)
+      .where("dns_verified", "=", 1)
+      .execute();
+
+    if (otherVerifiedDomains.length === 0) {
+      return NextResponse.json(
+        { error: "Cannot delete system domain when no other verified domain exists" },
+        { status: 400 },
+      );
+    }
   }
 
   await removeDomain(id);

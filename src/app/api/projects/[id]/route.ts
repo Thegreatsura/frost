@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { removeNetwork, stopContainer } from "@/lib/docker";
+import { updateSystemDomain } from "@/lib/domains";
 
 export async function GET(
   request: Request,
@@ -75,6 +76,17 @@ export async function PATCH(
       .set(updates)
       .where("id", "=", id)
       .execute();
+  }
+
+  if (body.name !== undefined && body.name !== project.name) {
+    const services = await db
+      .selectFrom("services")
+      .select(["id", "name"])
+      .where("project_id", "=", id)
+      .execute();
+    for (const svc of services) {
+      await updateSystemDomain(svc.id, svc.name, body.name);
+    }
   }
 
   const updated = await db

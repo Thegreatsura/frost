@@ -61,6 +61,10 @@ export function DomainsSection({
   const [redirectCode, setRedirectCode] = useState<"301" | "307">("301");
 
   const proxyDomains = domains?.filter((d) => d.type === "proxy") || [];
+  const systemDomains = domains?.filter((d) => d.is_system === 1) || [];
+  const customDomains = domains?.filter((d) => d.is_system !== 1) || [];
+  const hasOtherVerifiedDomains =
+    customDomains.filter((d) => d.dns_verified === 1).length > 0;
 
   const unverifiedDomainIds = useMemo(
     () => domains?.filter((d) => d.dns_verified !== 1).map((d) => d.id) || [],
@@ -323,9 +327,9 @@ export function DomainsSection({
           </div>
         )}
 
-        {domains && domains.length > 0 ? (
+        {systemDomains.length > 0 && (
           <div className="space-y-2">
-            {domains.map((domain) => (
+            {systemDomains.map((domain) => (
               <DomainRow
                 key={domain.id}
                 domain={domain}
@@ -333,16 +337,38 @@ export function DomainsSection({
                 onVerify={() => handleVerifyDns(domain.id)}
                 onDelete={() => handleDelete(domain.id)}
                 isVerifying={verifyDnsMutation.isPending}
+                canDelete={hasOtherVerifiedDomains}
               />
             ))}
           </div>
-        ) : (
-          !showAddForm && (
-            <p className="text-sm text-neutral-500">
-              No domains configured. Add a domain to access this service via a
-              custom URL.
-            </p>
-          )
+        )}
+
+        {customDomains.length > 0 && (
+          <div className={systemDomains.length > 0 ? "mt-4 space-y-2" : "space-y-2"}>
+            {systemDomains.length > 0 && (
+              <h4 className="text-xs font-medium text-neutral-500 uppercase tracking-wider mb-2">
+                Custom Domains
+              </h4>
+            )}
+            {customDomains.map((domain) => (
+              <DomainRow
+                key={domain.id}
+                domain={domain}
+                serverIp={serverIp}
+                onVerify={() => handleVerifyDns(domain.id)}
+                onDelete={() => handleDelete(domain.id)}
+                isVerifying={verifyDnsMutation.isPending}
+                canDelete={true}
+              />
+            ))}
+          </div>
+        )}
+
+        {domains && domains.length === 0 && !showAddForm && (
+          <p className="text-sm text-neutral-500">
+            No domains configured. Add a domain to access this service via a
+            custom URL.
+          </p>
         )}
       </CardContent>
     </Card>
@@ -355,6 +381,7 @@ interface DomainRowProps {
   onVerify: () => void;
   onDelete: () => void;
   isVerifying: boolean;
+  canDelete: boolean;
 }
 
 function CopyButton({ text }: { text: string }) {
@@ -382,10 +409,12 @@ function DomainRow({
   onVerify,
   onDelete,
   isVerifying,
+  canDelete,
 }: DomainRowProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const isVerified = domain.dns_verified === 1;
   const isActive = domain.ssl_status === "active";
+  const isSystem = domain.is_system === 1;
   const subdomain = extractSubdomain(domain.domain);
 
   return (
@@ -422,6 +451,14 @@ function DomainRow({
               )}
             </div>
             <div className="mt-1 flex items-center gap-2">
+              {isSystem && (
+                <Badge
+                  variant="outline"
+                  className="border-neutral-700 text-neutral-400 text-xs"
+                >
+                  Auto-generated
+                </Badge>
+              )}
               {isVerified ? (
                 isActive ? (
                   <span className="text-xs text-neutral-400">
@@ -434,27 +471,29 @@ function DomainRow({
                   </span>
                 )
               ) : (
-                <>
-                  <Badge
-                    variant="outline"
-                    className="border-yellow-800 bg-yellow-900/30 text-yellow-400 text-xs"
-                  >
-                    Verification Needed
-                  </Badge>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setIsExpanded(!isExpanded)}
-                    className="h-auto px-1 py-0 text-xs text-neutral-400 hover:text-neutral-200"
-                  >
-                    Learn more
-                    {isExpanded ? (
-                      <ChevronUp className="h-3 w-3" />
-                    ) : (
-                      <ChevronDown className="h-3 w-3" />
-                    )}
-                  </Button>
-                </>
+                !isSystem && (
+                  <>
+                    <Badge
+                      variant="outline"
+                      className="border-yellow-800 bg-yellow-900/30 text-yellow-400 text-xs"
+                    >
+                      Verification Needed
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsExpanded(!isExpanded)}
+                      className="h-auto px-1 py-0 text-xs text-neutral-400 hover:text-neutral-200"
+                    >
+                      Learn more
+                      {isExpanded ? (
+                        <ChevronUp className="h-3 w-3" />
+                      ) : (
+                        <ChevronDown className="h-3 w-3" />
+                      )}
+                    </Button>
+                  </>
+                )
               )}
               {domain.type === "redirect" && (
                 <Badge
@@ -468,25 +507,29 @@ function DomainRow({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onVerify}
-            disabled={isVerifying}
-            className="border-neutral-700 text-neutral-300"
-          >
-            {isVerifying ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <>
-                <RefreshCw className="mr-1 h-3 w-3" />
-                Refresh
-              </>
-            )}
-          </Button>
-          <Button variant="ghost" size="sm" onClick={onDelete}>
-            <Trash2 className="h-4 w-4 text-neutral-500" />
-          </Button>
+          {!isSystem && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onVerify}
+              disabled={isVerifying}
+              className="border-neutral-700 text-neutral-300"
+            >
+              {isVerifying ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  <RefreshCw className="mr-1 h-3 w-3" />
+                  Refresh
+                </>
+              )}
+            </Button>
+          )}
+          {canDelete && (
+            <Button variant="ghost" size="sm" onClick={onDelete}>
+              <Trash2 className="h-4 w-4 text-neutral-500" />
+            </Button>
+          )}
         </div>
       </div>
 

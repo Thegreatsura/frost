@@ -1,6 +1,9 @@
 import { Database } from "bun:sqlite";
 import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { getSetting } from "../src/lib/auth";
+import { db } from "../src/lib/db";
+import { createSystemDomain, getSystemDomainForService } from "../src/lib/domains";
 
 const DB_PATH = join(process.cwd(), "data", "frost.db");
 
@@ -85,3 +88,41 @@ if (appliedCount === 0) {
 }
 
 sqlite.close();
+
+async function ensureSystemDomains() {
+  const serverIp = await getSetting("server_ip");
+  if (!serverIp) {
+    console.log("No server_ip configured, skipping system domain creation");
+    return;
+  }
+
+  const services = await db
+    .selectFrom("services")
+    .innerJoin("projects", "projects.id", "services.project_id")
+    .select([
+      "services.id",
+      "services.name",
+      "projects.name as project_name",
+    ])
+    .execute();
+
+  let created = 0;
+  for (const svc of services) {
+    const existing = await getSystemDomainForService(svc.id);
+    if (!existing) {
+      await createSystemDomain(svc.id, svc.name, svc.project_name);
+      created++;
+    }
+  }
+
+  if (created > 0) {
+    console.log(`Created ${created} system domain(s)`);
+  }
+}
+
+ensureSystemDomains()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error("Failed to ensure system domains:", err);
+    process.exit(1);
+  });
