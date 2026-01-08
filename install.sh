@@ -176,9 +176,35 @@ EnvironmentFile=$FROST_DIR/.env
 WantedBy=multi-user.target
 EOF
 
+cat > /etc/systemd/system/frost-cleanup.service << EOF
+[Unit]
+Description=Frost Docker Cleanup
+After=frost.service
+
+[Service]
+Type=oneshot
+ExecStart=$FROST_DIR/cleanup.sh
+EOF
+
+cat > /etc/systemd/system/frost-cleanup.timer << EOF
+[Unit]
+Description=Frost Docker Cleanup Timer
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+chmod +x "$FROST_DIR/cleanup.sh"
+
 # Reload systemd and start services
 systemctl daemon-reload
 systemctl enable frost
+systemctl enable frost-cleanup.timer
+systemctl start frost-cleanup.timer
 systemctl restart frost
 
 # Wait for Frost to start

@@ -329,3 +329,106 @@ export function streamContainerLogs(
     },
   };
 }
+
+export async function listFrostImages(): Promise<string[]> {
+  try {
+    const { stdout } = await execAsync(
+      `docker images --format '{{.Repository}}:{{.Tag}}' | grep '^frost-' || true`,
+    );
+    return stdout.trim().split("\n").filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+export async function getImageCreatedAt(image: string): Promise<Date> {
+  const { stdout } = await execAsync(
+    `docker inspect --format '{{.Created}}' ${image}`,
+  );
+  return new Date(stdout.trim());
+}
+
+export async function getImageSize(image: string): Promise<number> {
+  try {
+    const { stdout } = await execAsync(
+      `docker inspect --format '{{.Size}}' ${image}`,
+    );
+    return parseInt(stdout.trim(), 10);
+  } catch {
+    return 0;
+  }
+}
+
+export async function removeImage(image: string): Promise<boolean> {
+  try {
+    await execAsync(`docker rmi ${image}`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function getRunningImageNames(): Promise<Set<string>> {
+  try {
+    const { stdout } = await execAsync(`docker ps --format '{{.Image}}'`);
+    return new Set(stdout.trim().split("\n").filter(Boolean));
+  } catch {
+    return new Set();
+  }
+}
+
+export async function pruneDanglingImages(): Promise<{
+  count: number;
+  bytes: number;
+}> {
+  try {
+    const { stdout } = await execAsync(
+      `docker image prune -f --format '{{.SpaceReclaimed}}'`,
+    );
+    const match = stdout.match(/(\d+)/);
+    const bytes = match ? parseInt(match[1], 10) : 0;
+    const countMatch = stdout.match(/deleted (\d+)/i);
+    const count = countMatch ? parseInt(countMatch[1], 10) : 0;
+    return { count, bytes };
+  } catch {
+    return { count: 0, bytes: 0 };
+  }
+}
+
+export async function listFrostNetworks(): Promise<string[]> {
+  try {
+    const { stdout } = await execAsync(
+      `docker network ls --format '{{.Name}}' | grep '^frost-net-' || true`,
+    );
+    return stdout.trim().split("\n").filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+export async function isNetworkInUse(name: string): Promise<boolean> {
+  try {
+    const { stdout } = await execAsync(
+      `docker network inspect ${name} --format '{{json .Containers}}'`,
+    );
+    const containers = JSON.parse(stdout.trim());
+    return Object.keys(containers).length > 0;
+  } catch {
+    return false;
+  }
+}
+
+export async function pruneStoppedContainers(): Promise<number> {
+  try {
+    const { stdout } = await execAsync(
+      `docker ps -a --filter "status=exited" --filter "name=^frost-" --format '{{.Names}}'`,
+    );
+    const containers = stdout.trim().split("\n").filter(Boolean);
+    for (const name of containers) {
+      await execAsync(`docker rm ${name}`).catch(() => {});
+    }
+    return containers.length;
+  } catch {
+    return 0;
+  }
+}
