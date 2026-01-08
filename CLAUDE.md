@@ -108,6 +108,16 @@ Types in `src/lib/db-types.ts` are auto-generated. Never modify manually.
 
 ## Git Conventions
 
+**Pre-commit checks** - run before committing:
+```bash
+bun run typecheck && bun run lint
+```
+
+**Auto-fix lint issues**:
+```bash
+bun run lint:fix
+```
+
 **Commit messages** - use conventional commits format:
 - `feat: add dark mode` - new feature
 - `fix: resolve login redirect` - bug fix
