@@ -9,8 +9,13 @@ interface RuntimeLogsProps {
   deploymentId: string;
 }
 
-function parseLogLine(line: string): { timestamp: string | null; content: string } {
-  const match = line.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)\s(.*)$/);
+function parseLogLine(line: string): {
+  timestamp: string | null;
+  content: string;
+} {
+  const match = line.match(
+    /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)\s(.*)$/,
+  );
   if (match) {
     return { timestamp: match[1], content: match[2] };
   }
@@ -83,7 +88,7 @@ export function RuntimeLogs({ deploymentId }: RuntimeLogsProps) {
         {logs.length === 0 ? (
           <span className="text-neutral-600">Waiting for logs...</span>
         ) : (
-          logs.map(function (line, i) {
+          logs.map((line, i) => {
             const { timestamp, content } = parseLogLine(line);
             return (
               <div key={i} className="leading-5">
@@ -101,10 +106,11 @@ export function RuntimeLogs({ deploymentId }: RuntimeLogsProps) {
 
       {!autoScroll && logs.length > 0 && (
         <button
-          onClick={function () {
+          onClick={() => {
             setAutoScroll(true);
             if (containerRef.current) {
-              containerRef.current.scrollTop = containerRef.current.scrollHeight;
+              containerRef.current.scrollTop =
+                containerRef.current.scrollHeight;
             }
           }}
           className="mx-auto mt-2 flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300"

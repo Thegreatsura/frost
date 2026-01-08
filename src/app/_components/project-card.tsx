@@ -63,13 +63,13 @@ export function ProjectCard({
 
       {latestDeployment && (
         <div className="mt-3 space-y-1">
-          {latestDeployment.commit_message && (
+          {latestDeployment.commitMessage && (
             <p className="truncate text-sm text-neutral-300">
-              {latestDeployment.commit_message}
+              {latestDeployment.commitMessage}
             </p>
           )}
           <div className="flex items-center gap-2 text-xs text-neutral-500">
-            <span>{formatTimeAgo(latestDeployment.created_at)}</span>
+            <span>{formatTimeAgo(latestDeployment.createdAt)}</span>
             {latestDeployment.branch && (
               <>
                 <span>on</span>

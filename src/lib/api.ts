@@ -1,15 +1,15 @@
 export interface ProjectLatestDeployment {
   status: string;
-  commit_message: string | null;
-  created_at: number;
+  commitMessage: string | null;
+  createdAt: number;
   branch: string | null;
 }
 
 export interface Project {
   id: string;
   name: string;
-  env_vars: string;
-  created_at: number;
+  envVars: string;
+  createdAt: number;
   services?: Service[];
   servicesCount?: number;
   latestDeployment?: ProjectLatestDeployment | null;
@@ -19,33 +19,33 @@ export interface Project {
 
 export interface Service {
   id: string;
-  project_id: string;
+  projectId: string;
   name: string;
-  deploy_type: "repo" | "image";
-  repo_url: string | null;
+  deployType: "repo" | "image";
+  repoUrl: string | null;
   branch: string | null;
-  dockerfile_path: string | null;
-  image_url: string | null;
-  env_vars: string;
-  container_port: number | null;
-  health_check_path: string | null;
-  health_check_timeout: number | null;
-  created_at: number;
+  dockerfilePath: string | null;
+  imageUrl: string | null;
+  envVars: string;
+  containerPort: number | null;
+  healthCheckPath: string | null;
+  healthCheckTimeout: number | null;
+  createdAt: number;
   latestDeployment?: Deployment;
 }
 
 export interface Deployment {
   id: string;
-  project_id: string;
-  service_id: string;
-  commit_sha: string;
-  commit_message: string | null;
+  projectId: string;
+  serviceId: string;
+  commitSha: string;
+  commitMessage: string | null;
   status: string;
-  host_port: number | null;
-  created_at: number;
-  finished_at: number | null;
-  build_log: string | null;
-  error_message: string | null;
+  hostPort: number | null;
+  createdAt: number;
+  finishedAt: number | null;
+  buildLog: string | null;
+  errorMessage: string | null;
 }
 
 export interface EnvVar {
@@ -55,15 +55,15 @@ export interface EnvVar {
 
 export interface Domain {
   id: string;
-  service_id: string;
+  serviceId: string;
   domain: string;
   type: "proxy" | "redirect";
-  redirect_target: string | null;
-  redirect_code: number | null;
-  dns_verified: number;
-  ssl_status: "pending" | "active" | "failed";
-  is_system: number;
-  created_at: number;
+  redirectTarget: string | null;
+  redirectCode: number | null;
+  dnsVerified: number;
+  sslStatus: "pending" | "active" | "failed";
+  isSystem: number;
+  createdAt: number;
 }
 
 export interface AddDomainInput {
@@ -95,8 +95,8 @@ export interface SslStatus {
 export interface Settings {
   domain: string | null;
   email: string | null;
-  ssl_enabled: string | null;
-  server_ip: string | null;
+  sslEnabled: string | null;
+  serverIp: string | null;
 }
 
 export interface CreateProjectInput {

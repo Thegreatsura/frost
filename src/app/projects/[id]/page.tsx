@@ -37,7 +37,7 @@ export default function ProjectPage() {
   const [serverIp, setServerIp] = useState<string | null>(null);
 
   useEffect(() => {
-    api.settings.get().then((s) => setServerIp(s.server_ip));
+    api.settings.get().then((s) => setServerIp(s.serverIp));
   }, []);
 
   async function handleDeployAll() {
@@ -72,7 +72,7 @@ export default function ProjectPage() {
 
   function handleEditEnv() {
     if (project) {
-      setEnvVars(project.env_vars ? JSON.parse(project.env_vars) : []);
+      setEnvVars(project.envVars ? JSON.parse(project.envVars) : []);
       setEditingEnv(true);
     }
   }
@@ -247,8 +247,8 @@ export default function ProjectPage() {
               ) : (
                 <div className="space-y-2">
                   {(() => {
-                    const vars: EnvVar[] = project.env_vars
-                      ? JSON.parse(project.env_vars)
+                    const vars: EnvVar[] = project.envVars
+                      ? JSON.parse(project.envVars)
                       : [];
                     if (vars.length === 0) {
                       return (

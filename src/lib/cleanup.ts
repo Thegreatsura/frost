@@ -71,7 +71,10 @@ export async function getCleanupSettings(): Promise<CleanupSettings> {
 
 export async function updateCleanupSettings(
   settings: Partial<
-    Pick<CleanupSettings, "enabled" | "keepImages" | "pruneDangling" | "pruneNetworks">
+    Pick<
+      CleanupSettings,
+      "enabled" | "keepImages" | "pruneDangling" | "pruneNetworks"
+    >
   >,
 ): Promise<void> {
   const updates: Promise<void>[] = [];
@@ -80,19 +83,27 @@ export async function updateCleanupSettings(
     updates.push(setSetting("cleanup_enabled", String(settings.enabled)));
   }
   if (settings.keepImages !== undefined) {
-    updates.push(setSetting("cleanup_keep_images", String(settings.keepImages)));
+    updates.push(
+      setSetting("cleanup_keep_images", String(settings.keepImages)),
+    );
   }
   if (settings.pruneDangling !== undefined) {
-    updates.push(setSetting("cleanup_prune_dangling", String(settings.pruneDangling)));
+    updates.push(
+      setSetting("cleanup_prune_dangling", String(settings.pruneDangling)),
+    );
   }
   if (settings.pruneNetworks !== undefined) {
-    updates.push(setSetting("cleanup_prune_networks", String(settings.pruneNetworks)));
+    updates.push(
+      setSetting("cleanup_prune_networks", String(settings.pruneNetworks)),
+    );
   }
 
   await Promise.all(updates);
 }
 
-export async function runCleanup(options: CleanupOptions): Promise<CleanupResult> {
+export async function runCleanup(
+  options: CleanupOptions,
+): Promise<CleanupResult> {
   const startedAt = new Date().toISOString();
   const result: CleanupResult = {
     success: true,
@@ -109,7 +120,10 @@ export async function runCleanup(options: CleanupOptions): Promise<CleanupResult
     const runningImages = await getRunningImageNames();
     const allImages = await listFrostImages();
 
-    const imagesByService = new Map<string, { name: string; created: Date; size: number }[]>();
+    const imagesByService = new Map<
+      string,
+      { name: string; created: Date; size: number }[]
+    >();
     for (const image of allImages) {
       const match = image.match(/^(frost-[^:]+):/);
       if (!match) continue;

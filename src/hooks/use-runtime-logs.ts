@@ -46,22 +46,24 @@ export function useRuntimeLogs({
       shouldReconnectRef.current = true;
       setError(null);
 
-      const es = new EventSource(`/api/deployments/${deploymentId}/logs?tail=100`);
+      const es = new EventSource(
+        `/api/deployments/${deploymentId}/logs?tail=100`,
+      );
       eventSourceRef.current = es;
 
-      es.onopen = function () {
+      es.onopen = () => {
         setIsConnected(true);
         setError(null);
       };
 
-      es.onmessage = function (event) {
+      es.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
           if (typeof data === "object" && data.error) {
             setError(data.error);
             return;
           }
-          setLogs(function (prev) {
+          setLogs((prev) => {
             const newLogs = [...prev, data];
             if (newLogs.length > MAX_LINES) {
               return newLogs.slice(-MAX_LINES);
@@ -69,7 +71,7 @@ export function useRuntimeLogs({
             return newLogs;
           });
         } catch {
-          setLogs(function (prev) {
+          setLogs((prev) => {
             const newLogs = [...prev, event.data];
             if (newLogs.length > MAX_LINES) {
               return newLogs.slice(-MAX_LINES);
@@ -79,13 +81,13 @@ export function useRuntimeLogs({
         }
       };
 
-      es.onerror = function () {
+      es.onerror = () => {
         setIsConnected(false);
         es.close();
         eventSourceRef.current = null;
 
         if (shouldReconnectRef.current) {
-          reconnectTimeoutRef.current = setTimeout(function () {
+          reconnectTimeoutRef.current = setTimeout(() => {
             connect();
           }, RECONNECT_DELAY);
         }
@@ -94,15 +96,12 @@ export function useRuntimeLogs({
     [deploymentId, disconnect],
   );
 
-  useEffect(
-    function () {
-      if (deploymentId) {
-        connect();
-      }
-      return disconnect;
-    },
-    [deploymentId, connect, disconnect],
-  );
+  useEffect(() => {
+    if (deploymentId) {
+      connect();
+    }
+    return disconnect;
+  }, [deploymentId, connect, disconnect]);
 
   return { logs, isConnected, error };
 }

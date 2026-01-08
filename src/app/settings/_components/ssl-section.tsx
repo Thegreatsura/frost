@@ -39,8 +39,8 @@ export function SslSection() {
         if (data.email) {
           setEmail(data.email);
         }
-        if (data.ssl_enabled === "true" || data.ssl_enabled === "pending") {
-          setSslStatus(data.ssl_enabled);
+        if (data.sslEnabled === "true" || data.sslEnabled === "pending") {
+          setSslStatus(data.sslEnabled);
         }
       })
       .catch(() => {});

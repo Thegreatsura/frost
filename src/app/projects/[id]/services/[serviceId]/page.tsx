@@ -48,16 +48,18 @@ export default function ServicePage() {
   const [editingHealth, setEditingHealth] = useState(false);
   const [healthPath, setHealthPath] = useState<string>("");
   const [healthTimeout, setHealthTimeout] = useState<number>(60);
-  const [activeLogTab, setActiveLogTab] = useState<"build" | "runtime">("build");
+  const [activeLogTab, setActiveLogTab] = useState<"build" | "runtime">(
+    "build",
+  );
 
   useEffect(() => {
-    api.settings.get().then((s) => setServerIp(s.server_ip));
+    api.settings.get().then((s) => setServerIp(s.serverIp));
   }, []);
 
   useEffect(() => {
     if (!serviceId) return;
     api.domains.list(serviceId).then((domains) => {
-      const sys = domains.find((d) => d.is_system === 1);
+      const sys = domains.find((d) => d.isSystem === 1);
       setSystemDomain(sys ?? null);
     });
   }, [serviceId]);
@@ -116,15 +118,15 @@ export default function ServicePage() {
 
   function handleEditEnv() {
     if (service) {
-      setEnvVars(service.env_vars ? JSON.parse(service.env_vars) : []);
+      setEnvVars(service.envVars ? JSON.parse(service.envVars) : []);
       setEditingEnv(true);
     }
   }
 
   function handleEditHealth() {
     if (service) {
-      setHealthPath(service.health_check_path ?? "");
-      setHealthTimeout(service.health_check_timeout ?? 60);
+      setHealthPath(service.healthCheckPath ?? "");
+      setHealthTimeout(service.healthCheckTimeout ?? 60);
       setEditingHealth(true);
     }
   }
@@ -217,9 +219,9 @@ export default function ServicePage() {
                 {service.name}
               </h1>
               <p className="mt-1 font-mono text-sm text-neutral-500">
-                {service.deploy_type === "image"
-                  ? service.image_url
-                  : service.repo_url}
+                {service.deployType === "image"
+                  ? service.imageUrl
+                  : service.repoUrl}
               </p>
             </div>
             <div className="flex gap-2">
@@ -263,7 +265,7 @@ export default function ServicePage() {
                       </a>
                     ) : (
                       <span className="text-sm text-neutral-300">
-                        Running on port {runningDeployment.host_port}
+                        Running on port {runningDeployment.hostPort}
                       </span>
                     )}
                   </div>
@@ -271,7 +273,7 @@ export default function ServicePage() {
                     href={
                       systemDomain
                         ? `https://${systemDomain.domain}`
-                        : `http://${serverIp || "localhost"}:${runningDeployment.host_port}`
+                        : `http://${serverIp || "localhost"}:${runningDeployment.hostPort}`
                     }
                     target="_blank"
                     rel="noopener noreferrer"
@@ -282,7 +284,7 @@ export default function ServicePage() {
                   </a>
                 </div>
                 <p className="mt-1 font-mono text-xs text-neutral-500">
-                  {runningDeployment.commit_sha}
+                  {runningDeployment.commitSha}
                 </p>
               </CardContent>
             </Card>
@@ -310,9 +312,9 @@ export default function ServicePage() {
                         <DeploymentRow
                           key={d.id}
                           id={d.id}
-                          commitSha={d.commit_sha}
+                          commitSha={d.commitSha}
                           status={d.status}
-                          createdAt={d.created_at}
+                          createdAt={d.createdAt}
                           selected={selectedDeployment?.id === d.id}
                           onClick={() => handleSelectDeployment(d)}
                         />
@@ -360,13 +362,13 @@ export default function ServicePage() {
                   <CardContent>
                     {activeLogTab === "build" ? (
                       <>
-                        {selectedDeployment.error_message && (
+                        {selectedDeployment.errorMessage && (
                           <div className="mb-4 rounded border border-red-900 bg-red-950/50 p-3 text-sm text-red-400">
-                            {selectedDeployment.error_message}
+                            {selectedDeployment.errorMessage}
                           </div>
                         )}
                         <pre className="max-h-96 overflow-auto rounded bg-neutral-950 p-4 font-mono text-xs text-neutral-400">
-                          {selectedDeployment.build_log || "No logs yet..."}
+                          {selectedDeployment.buildLog || "No logs yet..."}
                         </pre>
                       </>
                     ) : (
@@ -386,7 +388,7 @@ export default function ServicePage() {
             </CardHeader>
             <CardContent>
               <dl className="grid grid-cols-3 gap-4 text-sm">
-                {service.deploy_type === "repo" ? (
+                {service.deployType === "repo" ? (
                   <>
                     <div>
                       <dt className="text-neutral-500">Branch</dt>
@@ -397,7 +399,7 @@ export default function ServicePage() {
                     <div>
                       <dt className="text-neutral-500">Dockerfile</dt>
                       <dd className="mt-1 font-mono text-neutral-300">
-                        {service.dockerfile_path}
+                        {service.dockerfilePath}
                       </dd>
                     </div>
                   </>
@@ -405,14 +407,14 @@ export default function ServicePage() {
                   <div>
                     <dt className="text-neutral-500">Image</dt>
                     <dd className="mt-1 font-mono text-neutral-300">
-                      {service.image_url}
+                      {service.imageUrl}
                     </dd>
                   </div>
                 )}
                 <div>
                   <dt className="text-neutral-500">Container Port</dt>
                   <dd className="mt-1 font-mono text-neutral-300">
-                    {service.container_port ?? 8080}
+                    {service.containerPort ?? 8080}
                   </dd>
                 </div>
               </dl>
@@ -496,15 +498,15 @@ export default function ServicePage() {
                   <div>
                     <dt className="text-neutral-500">Method</dt>
                     <dd className="mt-1 font-mono text-neutral-300">
-                      {service.health_check_path
-                        ? `HTTP GET ${service.health_check_path}`
+                      {service.healthCheckPath
+                        ? `HTTP GET ${service.healthCheckPath}`
                         : "TCP"}
                     </dd>
                   </div>
                   <div>
                     <dt className="text-neutral-500">Timeout</dt>
                     <dd className="mt-1 font-mono text-neutral-300">
-                      {service.health_check_timeout ?? 60}s
+                      {service.healthCheckTimeout ?? 60}s
                     </dd>
                   </div>
                 </dl>
@@ -565,8 +567,8 @@ export default function ServicePage() {
               ) : (
                 <div className="space-y-2">
                   {(() => {
-                    const vars: EnvVar[] = service.env_vars
-                      ? JSON.parse(service.env_vars)
+                    const vars: EnvVar[] = service.envVars
+                      ? JSON.parse(service.envVars)
                       : [];
                     if (vars.length === 0) {
                       return (

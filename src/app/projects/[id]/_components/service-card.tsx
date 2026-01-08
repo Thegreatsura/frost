@@ -93,25 +93,25 @@ export function ServiceCard({
         </CardHeader>
         <CardContent className="space-y-2">
           <div className="flex items-center gap-2">
-            {service.deploy_type === "repo" &&
-              service.repo_url &&
-              getGitHubOwnerFromUrl(service.repo_url) && (
+            {service.deployType === "repo" &&
+              service.repoUrl &&
+              getGitHubOwnerFromUrl(service.repoUrl) && (
                 <img
-                  src={`https://github.com/${getGitHubOwnerFromUrl(service.repo_url)}.png?size=40`}
+                  src={`https://github.com/${getGitHubOwnerFromUrl(service.repoUrl)}.png?size=40`}
                   alt=""
                   className="h-5 w-5 rounded-full"
                 />
               )}
             <p className="truncate font-mono text-xs text-neutral-500">
-              {service.deploy_type === "image"
-                ? service.image_url
-                : service.repo_url?.replace("https://github.com/", "")}
+              {service.deployType === "image"
+                ? service.imageUrl
+                : service.repoUrl?.replace("https://github.com/", "")}
             </p>
           </div>
-          {isRunning && deployment?.host_port && (
+          {isRunning && deployment?.hostPort && (
             <div className="flex items-center justify-between">
               <span className="text-xs text-neutral-500">
-                Port {deployment.host_port}
+                Port {deployment.hostPort}
               </span>
               <button
                 type="button"
@@ -120,7 +120,7 @@ export function ServiceCard({
                   e.preventDefault();
                   e.stopPropagation();
                   window.open(
-                    `http://${serverIp || "localhost"}:${deployment.host_port}`,
+                    `http://${serverIp || "localhost"}:${deployment.hostPort}`,
                     "_blank",
                     "noopener,noreferrer",
                   );
@@ -132,7 +132,7 @@ export function ServiceCard({
             </div>
           )}
           {deployment && !isRunning && (
-            <p className="text-xs text-neutral-500">{deployment.commit_sha}</p>
+            <p className="text-xs text-neutral-500">{deployment.commitSha}</p>
           )}
         </CardContent>
       </Card>

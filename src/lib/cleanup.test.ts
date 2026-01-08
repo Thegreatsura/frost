@@ -60,7 +60,10 @@ describe("cleanup utilities", () => {
 
     const filtered = toDelete.filter((img) => !runningImages.has(img.name));
 
-    expect(filtered).toEqual([{ name: "frost-api:v1" }, { name: "frost-api:v2" }]);
+    expect(filtered).toEqual([
+      { name: "frost-api:v1" },
+      { name: "frost-api:v2" },
+    ]);
   });
 
   test("formats bytes correctly", () => {
@@ -69,7 +72,7 @@ describe("cleanup utilities", () => {
       const k = 1024;
       const sizes = ["B", "KB", "MB", "GB"];
       const i = Math.floor(Math.log(bytes) / Math.log(k));
-      return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
+      return `${(bytes / k ** i).toFixed(1)} ${sizes[i]}`;
     }
 
     expect(formatBytes(0)).toBe("0 B");

@@ -61,20 +61,20 @@ export function DomainsSection({
   const [redirectCode, setRedirectCode] = useState<"301" | "307">("301");
 
   const proxyDomains = domains?.filter((d) => d.type === "proxy") || [];
-  const systemDomains = domains?.filter((d) => d.is_system === 1) || [];
-  const customDomains = domains?.filter((d) => d.is_system !== 1) || [];
+  const systemDomains = domains?.filter((d) => d.isSystem === 1) || [];
+  const customDomains = domains?.filter((d) => d.isSystem !== 1) || [];
   const hasOtherVerifiedDomains =
-    customDomains.filter((d) => d.dns_verified === 1).length > 0;
+    customDomains.filter((d) => d.dnsVerified === 1).length > 0;
 
   const unverifiedDomainIds = useMemo(
-    () => domains?.filter((d) => d.dns_verified !== 1).map((d) => d.id) || [],
+    () => domains?.filter((d) => d.dnsVerified !== 1).map((d) => d.id) || [],
     [domains],
   );
 
   const pendingSslDomainIds = useMemo(
     () =>
       domains
-        ?.filter((d) => d.dns_verified === 1 && d.ssl_status !== "active")
+        ?.filter((d) => d.dnsVerified === 1 && d.sslStatus !== "active")
         .map((d) => d.id) || [],
     [domains],
   );
@@ -344,7 +344,11 @@ export function DomainsSection({
         )}
 
         {customDomains.length > 0 && (
-          <div className={systemDomains.length > 0 ? "mt-4 space-y-2" : "space-y-2"}>
+          <div
+            className={
+              systemDomains.length > 0 ? "mt-4 space-y-2" : "space-y-2"
+            }
+          >
             {systemDomains.length > 0 && (
               <h4 className="text-xs font-medium text-neutral-500 uppercase tracking-wider mb-2">
                 Custom Domains
@@ -412,9 +416,9 @@ function DomainRow({
   canDelete,
 }: DomainRowProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const isVerified = domain.dns_verified === 1;
-  const isActive = domain.ssl_status === "active";
-  const isSystem = domain.is_system === 1;
+  const isVerified = domain.dnsVerified === 1;
+  const isActive = domain.sslStatus === "active";
+  const isSystem = domain.isSystem === 1;
   const subdomain = extractSubdomain(domain.domain);
 
   return (
@@ -433,7 +437,7 @@ function DomainRow({
                   {domain.domain}
                   <ArrowRight className="h-3 w-3 text-neutral-500" />
                   <span className="text-neutral-400">
-                    {domain.redirect_target}
+                    {domain.redirectTarget}
                   </span>
                 </span>
               ) : isVerified ? (
@@ -500,7 +504,7 @@ function DomainRow({
                   variant="outline"
                   className="border-neutral-700 text-neutral-400 text-xs"
                 >
-                  {domain.redirect_code || 301} redirect
+                  {domain.redirectCode || 301} redirect
                 </Badge>
               )}
             </div>
