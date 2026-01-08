@@ -144,7 +144,7 @@ jobs:
           ssh root@${{ steps.server.outputs.ip }} "docker ps -a" || true
 
       - name: Delete server
-        if: always()
+        if: always() && steps.server.outputs.server_id
         run: |
           echo "Deleting server ${{ steps.server.outputs.server_id }}..."
           curl -s -X DELETE \
