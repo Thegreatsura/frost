@@ -32,13 +32,15 @@ describe("db-templates", () => {
     expect(cred1).not.toBe(cred2);
   });
 
-  test("buildConnectionString for postgres", () => {
+  test("buildConnectionString for postgres includes sslmode=require", () => {
     const connStr = buildConnectionString("postgres", "db-host", 5432, {
       POSTGRES_USER: "testuser",
       POSTGRES_PASSWORD: "testpass",
       POSTGRES_DB: "testdb",
     });
-    expect(connStr).toBe("postgresql://testuser:testpass@db-host:5432/testdb");
+    expect(connStr).toBe(
+      "postgresql://testuser:testpass@db-host:5432/testdb?sslmode=require",
+    );
   });
 
   test("buildConnectionString for mysql", () => {
@@ -109,5 +111,30 @@ describe("db-templates", () => {
       (e) => e.key === "MYSQL_ROOT_PASSWORD",
     );
     expect(mysqlPassEnv?.generated).toBe(true);
+  });
+
+  test("postgres templates have supportsSSL true", () => {
+    const postgres17 = getTemplate("postgres-17");
+    expect(postgres17?.supportsSSL).toBe(true);
+
+    const postgres16 = getTemplate("postgres-16");
+    expect(postgres16?.supportsSSL).toBe(true);
+  });
+
+  test("non-postgres templates have supportsSSL false", () => {
+    const mysql = getTemplate("mysql-8");
+    expect(mysql?.supportsSSL).toBe(false);
+
+    const redis = getTemplate("redis-7");
+    expect(redis?.supportsSSL).toBe(false);
+
+    const mongo = getTemplate("mongo-7");
+    expect(mongo?.supportsSSL).toBe(false);
+  });
+
+  test("all templates have supportsSSL defined", () => {
+    for (const template of DATABASE_TEMPLATES) {
+      expect(typeof template.supportsSSL).toBe("boolean");
+    }
   });
 });

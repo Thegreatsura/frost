@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { stopContainer } from "@/lib/docker";
 import { syncCaddyConfig, updateSystemDomain } from "@/lib/domains";
+import { removeSSLCerts } from "@/lib/ssl";
 import { buildVolumeName, removeVolume } from "@/lib/volumes";
 
 export async function GET(
@@ -156,6 +157,7 @@ export async function DELETE(
     for (const v of volumeConfig) {
       await removeVolume(buildVolumeName(id, v.name));
     }
+    await removeSSLCerts(id);
   }
 
   await db.deleteFrom("services").where("id", "=", id).execute();

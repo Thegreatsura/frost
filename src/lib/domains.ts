@@ -109,7 +109,7 @@ function slugify(name: string): string {
     .replace(/-+/g, "-");
 }
 
-function buildSslipDomain(
+export function buildSslipDomain(
   serviceName: string,
   projectName: string,
   serverIp: string,

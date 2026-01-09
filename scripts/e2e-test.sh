@@ -565,6 +565,16 @@ fi
 echo "Database credentials auto-generated (password length: ${#POSTGRES_PASSWORD})"
 
 echo ""
+echo "=== Test 33b: Verify SSL cert generated for postgres ==="
+SSL_CERT_EXISTS=$(remote "test -f /opt/frost/ssl/$SERVICE8_ID/server.crt && echo 'exists'" 2>&1)
+SSL_KEY_EXISTS=$(remote "test -f /opt/frost/ssl/$SERVICE8_ID/server.key && echo 'exists'" 2>&1)
+if [ "$SSL_CERT_EXISTS" != "exists" ] || [ "$SSL_KEY_EXISTS" != "exists" ]; then
+  echo "FAIL: SSL cert/key not generated for postgres service"
+  exit 1
+fi
+echo "SSL certificate generated for postgres service"
+
+echo ""
 echo "=== Test 34: Deploy database service ==="
 DEPLOY8=$(api -X POST "$BASE_URL/api/services/$SERVICE8_ID/deploy")
 DEPLOY8_ID=$(echo "$DEPLOY8" | jq -r '.deployment_id')
@@ -581,6 +591,16 @@ if echo "$PG_READY" | grep -q "ready"; then
   echo "PostgreSQL is accepting connections!"
 else
   echo "PostgreSQL connection check (non-fatal): $PG_READY"
+fi
+
+echo ""
+echo "=== Test 35b: Verify SSL is enabled in build log ==="
+BUILD_LOG=$(api "$BASE_URL/api/deployments/$DEPLOY8_ID" | jq -r '.buildLog')
+if echo "$BUILD_LOG" | grep -q "SSL enabled for postgres"; then
+  echo "SSL enabled in postgres deployment"
+else
+  echo "FAIL: SSL enabled message not found in build log"
+  exit 1
 fi
 
 echo ""
@@ -605,6 +625,15 @@ if echo "$VOLUME_AFTER" | grep -q "$EXPECTED_VOLUME"; then
   exit 1
 fi
 echo "Volume deleted with service"
+
+echo ""
+echo "=== Test 37b: Verify SSL cert deleted with service ==="
+SSL_CERT_AFTER=$(remote "test -f /opt/frost/ssl/$SERVICE8_ID/server.crt && echo 'exists' || echo 'deleted'" 2>&1)
+if [ "$SSL_CERT_AFTER" = "exists" ]; then
+  echo "FAIL: SSL cert should have been deleted"
+  exit 1
+fi
+echo "SSL certificate deleted with service"
 
 echo ""
 echo "=== Test 38: Cleanup database test project ==="

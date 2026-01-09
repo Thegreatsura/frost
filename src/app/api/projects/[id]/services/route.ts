@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { generateCredential, getTemplate } from "@/lib/db-templates";
 import { createSystemDomain } from "@/lib/domains";
+import { generateSelfSignedCert } from "@/lib/ssl";
 
 export async function GET(
   request: Request,
@@ -153,6 +154,10 @@ export async function POST(
         createdAt: now,
       })
       .execute();
+
+    if (template.supportsSSL) {
+      await generateSelfSignedCert(id);
+    }
   } else {
     await db
       .insertInto("services")

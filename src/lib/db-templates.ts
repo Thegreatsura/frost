@@ -13,6 +13,7 @@ export interface DatabaseTemplate {
   envVars: { key: string; value: string; generated?: boolean }[];
   volumes: VolumeMount[];
   healthCheckTimeout: number;
+  supportsSSL: boolean;
 }
 
 export const DATABASE_TEMPLATES: DatabaseTemplate[] = [
@@ -28,6 +29,7 @@ export const DATABASE_TEMPLATES: DatabaseTemplate[] = [
     ],
     volumes: [{ name: "data", path: "/var/lib/postgresql/data" }],
     healthCheckTimeout: 60,
+    supportsSSL: true,
   },
   {
     id: "postgres-16",
@@ -41,6 +43,7 @@ export const DATABASE_TEMPLATES: DatabaseTemplate[] = [
     ],
     volumes: [{ name: "data", path: "/var/lib/postgresql/data" }],
     healthCheckTimeout: 60,
+    supportsSSL: true,
   },
   {
     id: "mysql-8",
@@ -53,6 +56,7 @@ export const DATABASE_TEMPLATES: DatabaseTemplate[] = [
     ],
     volumes: [{ name: "data", path: "/var/lib/mysql" }],
     healthCheckTimeout: 90,
+    supportsSSL: false,
   },
   {
     id: "redis-7",
@@ -62,6 +66,7 @@ export const DATABASE_TEMPLATES: DatabaseTemplate[] = [
     envVars: [],
     volumes: [{ name: "data", path: "/data" }],
     healthCheckTimeout: 30,
+    supportsSSL: false,
   },
   {
     id: "mongo-7",
@@ -74,6 +79,7 @@ export const DATABASE_TEMPLATES: DatabaseTemplate[] = [
     ],
     volumes: [{ name: "data", path: "/data/db" }],
     healthCheckTimeout: 60,
+    supportsSSL: false,
   },
 ];
 
@@ -94,7 +100,7 @@ export function buildConnectionString(
   const dbType = templateId.split("-")[0];
   switch (dbType) {
     case "postgres":
-      return `postgresql://${envVars.POSTGRES_USER}:${envVars.POSTGRES_PASSWORD}@${host}:${port}/${envVars.POSTGRES_DB}`;
+      return `postgresql://${envVars.POSTGRES_USER}:${envVars.POSTGRES_PASSWORD}@${host}:${port}/${envVars.POSTGRES_DB}?sslmode=require`;
     case "mysql":
       return `mysql://root:${envVars.MYSQL_ROOT_PASSWORD}@${host}:${port}/${envVars.MYSQL_DATABASE}`;
     case "redis":

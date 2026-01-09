@@ -9,6 +9,7 @@ import type { Project, Service } from "./db-types";
 import {
   buildImage,
   createNetwork,
+  type FileMount,
   getAvailablePort,
   pullImage,
   runContainer,
@@ -24,6 +25,7 @@ import {
   injectTokenIntoUrl,
   isGitHubRepo,
 } from "./github";
+import { generateSelfSignedCert, getSSLPaths, sslCertsExist } from "./ssl";
 import type { EnvVar } from "./types";
 import { buildVolumeName, createVolume } from "./volumes";
 
@@ -349,6 +351,40 @@ async function runServiceDeployment(
       );
     }
 
+    let fileMounts: FileMount[] | undefined;
+    let command: string[] | undefined;
+    const isPostgres = service.imageUrl?.includes("postgres") ?? false;
+    if (service.serviceType === "database" && isPostgres) {
+      if (!sslCertsExist(service.id)) {
+        await generateSelfSignedCert(service.id);
+        await appendLog(
+          deploymentId,
+          "Generated SSL certificate for database\n",
+        );
+      }
+      const sslPaths = getSSLPaths(service.id);
+      fileMounts = [
+        {
+          hostPath: sslPaths.cert,
+          containerPath: "/etc/ssl/postgres/server.crt",
+        },
+        {
+          hostPath: sslPaths.key,
+          containerPath: "/etc/ssl/postgres/server.key",
+        },
+      ];
+      command = [
+        "postgres",
+        "-c",
+        "ssl=on",
+        "-c",
+        "ssl_cert_file=/etc/ssl/postgres/server.crt",
+        "-c",
+        "ssl_key_file=/etc/ssl/postgres/server.key",
+      ];
+      await appendLog(deploymentId, "SSL enabled for postgres\n");
+    }
+
     const hostPort = await getAvailablePort();
     const runResult = await runContainer({
       imageName,
@@ -363,6 +399,8 @@ async function runServiceDeployment(
         "frost.deployment.id": deploymentId,
       },
       volumes,
+      fileMounts,
+      command,
     });
 
     if (!runResult.success) {

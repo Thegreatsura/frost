@@ -32,6 +32,7 @@ import {
 import type { Deployment, Domain, EnvVar } from "@/lib/api";
 import { api } from "@/lib/api";
 import { buildConnectionString } from "@/lib/db-templates";
+import { buildSslipDomain } from "@/lib/domains";
 import { cn } from "@/lib/utils";
 import { DeploymentRow } from "./_components/deployment-row";
 import { DomainsSection } from "./_components/domains-section";
@@ -410,7 +411,7 @@ export default function ServicePage() {
                         />
                       </div>
 
-                      {tcpProxy?.enabled && tcpProxy.port && (
+                      {tcpProxy?.enabled && tcpProxy.port && serverIp && (
                         <div className="mt-3">
                           <p className="mb-1 text-xs text-neutral-500">
                             External Connection
@@ -419,7 +420,11 @@ export default function ServicePage() {
                             <code className="flex-1 rounded bg-neutral-800 px-3 py-2 font-mono text-xs text-neutral-300">
                               {buildConnectionString(
                                 service.imageUrl?.split(":")[0] ?? "",
-                                serverIp || "localhost",
+                                buildSslipDomain(
+                                  service.name,
+                                  project?.name ?? "",
+                                  serverIp,
+                                ),
                                 tcpProxy.port,
                                 JSON.parse(service.envVars).reduce(
                                   (acc: Record<string, string>, v: EnvVar) => {
@@ -437,7 +442,11 @@ export default function ServicePage() {
                                 navigator.clipboard.writeText(
                                   buildConnectionString(
                                     service.imageUrl?.split(":")[0] ?? "",
-                                    serverIp || "localhost",
+                                    buildSslipDomain(
+                                      service.name,
+                                      project?.name ?? "",
+                                      serverIp,
+                                    ),
                                     tcpProxy.port!,
                                     JSON.parse(service.envVars).reduce(
                                       (

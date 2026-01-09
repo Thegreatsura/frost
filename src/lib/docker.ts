@@ -135,6 +135,11 @@ export interface VolumeMount {
   path: string;
 }
 
+export interface FileMount {
+  hostPath: string;
+  containerPath: string;
+}
+
 export interface RunContainerOptions {
   imageName: string;
   hostPort: number;
@@ -145,6 +150,8 @@ export interface RunContainerOptions {
   hostname?: string;
   labels?: Record<string, string>;
   volumes?: VolumeMount[];
+  fileMounts?: FileMount[];
+  command?: string[];
 }
 
 export async function runContainer(
@@ -160,6 +167,8 @@ export async function runContainer(
     hostname,
     labels,
     volumes,
+    fileMounts,
+    command,
   } = options;
   try {
     await stopContainer(name);
@@ -178,9 +187,15 @@ export async function runContainer(
     const volumeFlags = volumes
       ? volumes.map((v) => `-v ${v.name}:${v.path}`).join(" ")
       : "";
+    const fileMountFlags = fileMounts
+      ? fileMounts
+          .map((f) => `-v ${f.hostPath}:${f.containerPath}:ro`)
+          .join(" ")
+      : "";
+    const commandPart = command ? command.join(" ") : "";
     const logOpts = "--log-opt max-size=10m --log-opt max-file=3";
     const { stdout } = await execAsync(
-      `docker run -d --restart on-failure:5 ${logOpts} --name ${name} -p ${hostPort}:${containerPort} ${networkFlag} ${hostnameFlag} ${labelFlags} ${volumeFlags} ${envFlags} ${imageName}`.replace(
+      `docker run -d --restart on-failure:5 ${logOpts} --name ${name} -p ${hostPort}:${containerPort} ${networkFlag} ${hostnameFlag} ${labelFlags} ${volumeFlags} ${fileMountFlags} ${envFlags} ${imageName} ${commandPart}`.replace(
         /\s+/g,
         " ",
       ),
