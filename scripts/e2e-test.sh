@@ -457,6 +457,11 @@ SERVICE7=$(api -X POST "$BASE_URL/api/projects/$PROJECT7_ID/services" \
 SERVICE7_ID=$(echo "$SERVICE7" | jq -r '.id')
 echo "Created service: $SERVICE7_ID"
 
+sleep 2
+DEPLOY7_INITIAL=$(api "$BASE_URL/api/services/$SERVICE7_ID/deployments" | jq -r '.[0].id')
+echo "Waiting for initial auto-deployment: $DEPLOY7_INITIAL"
+wait_for_deployment "$DEPLOY7_INITIAL" 60
+
 COMMIT_SHA="e2etest$(date +%s)"
 WEBHOOK_PAYLOAD=$(cat <<PAYLOAD
 {"ref":"refs/heads/main","after":"$COMMIT_SHA","repository":{"default_branch":"main","clone_url":"https://github.com/elitan/frost.git","html_url":"https://github.com/elitan/frost"},"head_commit":{"message":"e2e test commit"}}
@@ -571,8 +576,8 @@ echo "Database credentials auto-generated (password length: ${#POSTGRES_PASSWORD
 
 echo ""
 echo "=== Test 33b: Verify SSL cert generated for postgres ==="
-SSL_CERT_EXISTS=$(remote "test -f /opt/frost/ssl/$SERVICE8_ID/server.crt && echo 'exists'" 2>&1)
-SSL_KEY_EXISTS=$(remote "test -f /opt/frost/ssl/$SERVICE8_ID/server.key && echo 'exists'" 2>&1)
+SSL_CERT_EXISTS=$(remote "test -f /opt/frost/data/ssl/$SERVICE8_ID/server.crt && echo 'exists'" 2>&1)
+SSL_KEY_EXISTS=$(remote "test -f /opt/frost/data/ssl/$SERVICE8_ID/server.key && echo 'exists'" 2>&1)
 if [ "$SSL_CERT_EXISTS" != "exists" ] || [ "$SSL_KEY_EXISTS" != "exists" ]; then
   echo "FAIL: SSL cert/key not generated for postgres service"
   exit 1
@@ -633,7 +638,7 @@ echo "Volume deleted with service"
 
 echo ""
 echo "=== Test 37b: Verify SSL cert deleted with service ==="
-SSL_CERT_AFTER=$(remote "test -f /opt/frost/ssl/$SERVICE8_ID/server.crt && echo 'exists' || echo 'deleted'" 2>&1)
+SSL_CERT_AFTER=$(remote "test -f /opt/frost/data/ssl/$SERVICE8_ID/server.crt && echo 'exists' || echo 'deleted'" 2>&1)
 if [ "$SSL_CERT_AFTER" = "exists" ]; then
   echo "FAIL: SSL cert should have been deleted"
   exit 1
@@ -700,23 +705,27 @@ ROLLBACK_RESULT=$(api -X POST "$BASE_URL/api/deployments/$DEPLOY9A_ID/rollback")
 ROLLBACK_DEPLOY_ID=$(echo "$ROLLBACK_RESULT" | jq -r '.deployment_id')
 
 if [ "$ROLLBACK_DEPLOY_ID" = "null" ] || [ -z "$ROLLBACK_DEPLOY_ID" ]; then
-  echo "FAIL: Rollback did not return new deployment_id"
+  echo "FAIL: Rollback did not return deployment_id"
   echo "Response: $ROLLBACK_RESULT"
   exit 1
 fi
-echo "Rollback created new deployment: $ROLLBACK_DEPLOY_ID"
+if [ "$ROLLBACK_DEPLOY_ID" != "$DEPLOY9A_ID" ]; then
+  echo "FAIL: Rollback should reactivate same deployment (expected $DEPLOY9A_ID, got $ROLLBACK_DEPLOY_ID)"
+  exit 1
+fi
+echo "Rollback reactivating deployment: $ROLLBACK_DEPLOY_ID"
 
 echo ""
 echo "=== Test 42: Wait for rollback deployment ==="
 wait_for_deployment "$ROLLBACK_DEPLOY_ID"
 
-ROLLBACK_DEPLOY=$(api "$BASE_URL/api/deployments/$ROLLBACK_DEPLOY_ID")
-ROLLBACK_SOURCE=$(echo "$ROLLBACK_DEPLOY" | jq -r '.rollbackSourceId')
-if [ "$ROLLBACK_SOURCE" != "$DEPLOY9A_ID" ]; then
-  echo "FAIL: Rollback deployment should have rollbackSourceId=$DEPLOY9A_ID (got: $ROLLBACK_SOURCE)"
+SERVICE9_UPDATED=$(api "$BASE_URL/api/services/$SERVICE9_ID")
+CURRENT_DEPLOY_ID=$(echo "$SERVICE9_UPDATED" | jq -r '.currentDeploymentId')
+if [ "$CURRENT_DEPLOY_ID" != "$DEPLOY9A_ID" ]; then
+  echo "FAIL: Service currentDeploymentId should be $DEPLOY9A_ID (got: $CURRENT_DEPLOY_ID)"
   exit 1
 fi
-echo "Rollback deployment correctly references source deployment"
+echo "Service currentDeploymentId correctly updated to rolled-back deployment"
 
 echo ""
 echo "=== Test 43: Verify rollback service responds ==="
