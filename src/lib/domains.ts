@@ -2,6 +2,9 @@ import { promises as dns } from "node:dns";
 import { nanoid } from "nanoid";
 import { getSetting } from "./auth";
 import { db } from "./db";
+import { buildSslipDomain } from "./sslip";
+
+export { buildSslipDomain };
 
 const CADDY_ADMIN = "http://localhost:2019";
 const ACME_STAGING_CA =
@@ -99,27 +102,6 @@ export async function updateDomain(
 
 export async function removeDomain(id: string) {
   await db.deleteFrom("domains").where("id", "=", id).execute();
-}
-
-function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .replace(/-+/g, "-");
-}
-
-export function buildSslipDomain(
-  serviceName: string,
-  projectName: string,
-  serverIp: string,
-  suffix?: number,
-): string {
-  const serviceSlug = slugify(serviceName);
-  const projectSlug = slugify(projectName);
-  const base = `${serviceSlug}-${projectSlug}`;
-  const withSuffix = suffix ? `${base}-${suffix}` : base;
-  return `${withSuffix}.${serverIp}.sslip.io`;
 }
 
 export async function getSystemDomainForService(serviceId: string) {

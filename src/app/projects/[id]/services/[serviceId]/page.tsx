@@ -32,7 +32,7 @@ import {
 import type { Deployment, Domain, EnvVar } from "@/lib/api";
 import { api } from "@/lib/api";
 import { buildConnectionString } from "@/lib/db-templates";
-import { buildSslipDomain } from "@/lib/domains";
+import { buildSslipDomain } from "@/lib/sslip";
 import { cn } from "@/lib/utils";
 import { DeploymentRow } from "./_components/deployment-row";
 import { DomainsSection } from "./_components/domains-section";
