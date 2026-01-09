@@ -47,11 +47,18 @@ export function DeploymentRow({
   }
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
+        }
+      }}
       className={cn(
-        "group w-full px-4 py-3 text-left transition-colors hover:bg-neutral-800/50",
+        "group w-full px-4 py-3 text-left transition-colors hover:bg-neutral-800/50 cursor-pointer",
         selected && "bg-neutral-800",
       )}
     >
@@ -89,7 +96,7 @@ export function DeploymentRow({
           </span>
         </div>
       </div>
-    </button>
+    </div>
   );
 }
 
