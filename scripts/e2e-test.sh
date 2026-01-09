@@ -69,7 +69,7 @@ fi
 echo "Created project: $PROJECT_ID"
 
 echo ""
-echo "=== Test 2: Create service ==="
+echo "=== Test 2: Create service (auto-deploys) ==="
 SERVICE=$(api -X POST "$BASE_URL/api/projects/$PROJECT_ID/services" \
   -d '{"name":"test-nginx","deployType":"image","imageUrl":"nginx:alpine","containerPort":80}')
 SERVICE_ID=$(echo "$SERVICE" | jq -r '.id')
@@ -83,17 +83,22 @@ fi
 echo "Created service: $SERVICE_ID"
 
 echo ""
-echo "=== Test 3: Deploy service ==="
-DEPLOY=$(api -X POST "$BASE_URL/api/services/$SERVICE_ID/deploy")
-DEPLOYMENT_ID=$(echo "$DEPLOY" | jq -r '.deployment_id')
+echo "=== Test 3: Get auto-deployment ==="
+sleep 2
+DEPLOYMENT_ID=$(api "$BASE_URL/api/services/$SERVICE_ID/deployments" | jq -r '.[0].id // empty')
+
+if [ -z "$DEPLOYMENT_ID" ]; then
+  echo "No auto-deployment found, triggering manual deploy..."
+  DEPLOY=$(api -X POST "$BASE_URL/api/services/$SERVICE_ID/deploy")
+  DEPLOYMENT_ID=$(echo "$DEPLOY" | jq -r '.deployment_id')
+fi
 
 if [ "$DEPLOYMENT_ID" = "null" ] || [ -z "$DEPLOYMENT_ID" ]; then
-  echo "Failed to deploy:"
-  echo "$DEPLOY" | jq
+  echo "Failed to get deployment"
   exit 1
 fi
 
-echo "Started deployment: $DEPLOYMENT_ID"
+echo "Using deployment: $DEPLOYMENT_ID"
 
 echo ""
 echo "=== Test 4: Wait for deployment ==="
@@ -142,7 +147,7 @@ echo "# Test Group 2: Multi-service networking"
 echo "########################################"
 
 echo ""
-echo "=== Test 7: Create project with two services ==="
+echo "=== Test 7: Create project with two services (auto-deploys) ==="
 PROJECT2=$(api -X POST "$BASE_URL/api/projects" -d '{"name":"e2e-multiservice"}')
 PROJECT2_ID=$(echo "$PROJECT2" | jq -r '.id')
 echo "Created project: $PROJECT2_ID"
@@ -152,21 +157,22 @@ BACKEND=$(api -X POST "$BASE_URL/api/projects/$PROJECT2_ID/services" \
 BACKEND_ID=$(echo "$BACKEND" | jq -r '.id')
 echo "Created backend service: $BACKEND_ID"
 
+sleep 1
+
 FRONTEND=$(api -X POST "$BASE_URL/api/projects/$PROJECT2_ID/services" \
   -d '{"name":"frontend","deployType":"image","imageUrl":"nginx:alpine","containerPort":80}')
 FRONTEND_ID=$(echo "$FRONTEND" | jq -r '.id')
 echo "Created frontend service: $FRONTEND_ID"
 
 echo ""
-echo "=== Test 8: Deploy both services (sequentially to avoid port collision) ==="
-DEPLOY_BACKEND=$(api -X POST "$BASE_URL/api/services/$BACKEND_ID/deploy")
-DEPLOY_BACKEND_ID=$(echo "$DEPLOY_BACKEND" | jq -r '.deployment_id')
-echo "Started backend deployment: $DEPLOY_BACKEND_ID"
+echo "=== Test 8: Wait for auto-deployments ==="
+sleep 2
+DEPLOY_BACKEND_ID=$(api "$BASE_URL/api/services/$BACKEND_ID/deployments" | jq -r '.[0].id')
+echo "Backend deployment: $DEPLOY_BACKEND_ID"
 wait_for_deployment "$DEPLOY_BACKEND_ID"
 
-DEPLOY_FRONTEND=$(api -X POST "$BASE_URL/api/services/$FRONTEND_ID/deploy")
-DEPLOY_FRONTEND_ID=$(echo "$DEPLOY_FRONTEND" | jq -r '.deployment_id')
-echo "Started frontend deployment: $DEPLOY_FRONTEND_ID"
+DEPLOY_FRONTEND_ID=$(api "$BASE_URL/api/services/$FRONTEND_ID/deployments" | jq -r '.[0].id')
+echo "Frontend deployment: $DEPLOY_FRONTEND_ID"
 wait_for_deployment "$DEPLOY_FRONTEND_ID"
 
 echo ""
@@ -204,9 +210,9 @@ SERVICE3_ID=$(echo "$SERVICE3" | jq -r '.id')
 echo "Created service with env vars: $SERVICE3_ID"
 
 echo ""
-echo "=== Test 12: Deploy and verify env vars ==="
-DEPLOY3=$(api -X POST "$BASE_URL/api/services/$SERVICE3_ID/deploy")
-DEPLOY3_ID=$(echo "$DEPLOY3" | jq -r '.deployment_id')
+echo "=== Test 12: Wait for auto-deployment and verify env vars ==="
+sleep 2
+DEPLOY3_ID=$(api "$BASE_URL/api/services/$SERVICE3_ID/deployments" | jq -r '.[0].id')
 wait_for_deployment "$DEPLOY3_ID"
 
 CONTAINER_NAME="frost-${PROJECT3_ID}-envcheck"
@@ -244,7 +250,7 @@ echo "# Test Group 4: Service update + redeploy"
 echo "########################################"
 
 echo ""
-echo "=== Test 14: Create service, deploy, update, redeploy ==="
+echo "=== Test 14: Create service and wait for auto-deployment ==="
 PROJECT4=$(api -X POST "$BASE_URL/api/projects" -d '{"name":"e2e-update"}')
 PROJECT4_ID=$(echo "$PROJECT4" | jq -r '.id')
 echo "Created project: $PROJECT4_ID"
@@ -254,8 +260,8 @@ SERVICE4=$(api -X POST "$BASE_URL/api/projects/$PROJECT4_ID/services" \
 SERVICE4_ID=$(echo "$SERVICE4" | jq -r '.id')
 echo "Created service: $SERVICE4_ID"
 
-DEPLOY4=$(api -X POST "$BASE_URL/api/services/$SERVICE4_ID/deploy")
-DEPLOY4_ID=$(echo "$DEPLOY4" | jq -r '.deployment_id')
+sleep 2
+DEPLOY4_ID=$(api "$BASE_URL/api/services/$SERVICE4_ID/deployments" | jq -r '.[0].id')
 wait_for_deployment "$DEPLOY4_ID"
 
 HOST_PORT4=$(api "$BASE_URL/api/deployments/$DEPLOY4_ID" | jq -r '.hostPort')
@@ -329,15 +335,14 @@ SERVICE5=$(api -X POST "$BASE_URL/api/projects/$PROJECT5_ID/services" \
 SERVICE5_ID=$(echo "$SERVICE5" | jq -r '.id')
 echo "Created service: $SERVICE5_ID"
 
-echo "Calling deploy API for service $SERVICE5_ID..."
-DEPLOY5=$(api -X POST "$BASE_URL/api/services/$SERVICE5_ID/deploy")
-echo "Deploy response: $DEPLOY5"
-DEPLOY5_ID=$(echo "$DEPLOY5" | jq -r '.deployment_id')
+sleep 2
+DEPLOY5_ID=$(api "$BASE_URL/api/services/$SERVICE5_ID/deployments" | jq -r '.[0].id')
 if [ "$DEPLOY5_ID" = "null" ] || [ -z "$DEPLOY5_ID" ]; then
-  echo "Deploy failed - deployment_id is null or empty"
-  exit 1
+  echo "No auto-deployment found - triggering manual deploy"
+  DEPLOY5=$(api -X POST "$BASE_URL/api/services/$SERVICE5_ID/deploy")
+  DEPLOY5_ID=$(echo "$DEPLOY5" | jq -r '.deployment_id')
 fi
-echo "Started deployment: $DEPLOY5_ID"
+echo "Using deployment: $DEPLOY5_ID"
 wait_for_deployment "$DEPLOY5_ID"
 
 DOMAINS=$(api "$BASE_URL/api/services/$SERVICE5_ID/domains")
@@ -575,10 +580,10 @@ fi
 echo "SSL certificate generated for postgres service"
 
 echo ""
-echo "=== Test 34: Deploy database service ==="
-DEPLOY8=$(api -X POST "$BASE_URL/api/services/$SERVICE8_ID/deploy")
-DEPLOY8_ID=$(echo "$DEPLOY8" | jq -r '.deployment_id')
-echo "Started deployment: $DEPLOY8_ID"
+echo "=== Test 34: Wait for database auto-deployment ==="
+sleep 3
+DEPLOY8_ID=$(api "$BASE_URL/api/services/$SERVICE8_ID/deployments" | jq -r '.[0].id')
+echo "Using deployment: $DEPLOY8_ID"
 wait_for_deployment "$DEPLOY8_ID" 45
 
 echo ""
@@ -638,6 +643,121 @@ echo "SSL certificate deleted with service"
 echo ""
 echo "=== Test 38: Cleanup database test project ==="
 api -X DELETE "$BASE_URL/api/projects/$PROJECT8_ID" > /dev/null
+echo "Deleted project"
+
+echo ""
+echo "########################################"
+echo "# Test Group 8: Rollback"
+echo "########################################"
+
+echo ""
+echo "=== Test 39: Create service (auto-deploys) and deploy again ==="
+PROJECT9=$(api -X POST "$BASE_URL/api/projects" -d '{"name":"e2e-rollback"}')
+PROJECT9_ID=$(echo "$PROJECT9" | jq -r '.id')
+echo "Created project: $PROJECT9_ID"
+
+SERVICE9=$(api -X POST "$BASE_URL/api/projects/$PROJECT9_ID/services" \
+  -d '{"name":"rollback-test","deployType":"image","imageUrl":"nginx:alpine","containerPort":80}')
+SERVICE9_ID=$(echo "$SERVICE9" | jq -r '.id')
+echo "Created service: $SERVICE9_ID"
+
+sleep 2
+DEPLOY9A_ID=$(api "$BASE_URL/api/services/$SERVICE9_ID/deployments" | jq -r '.[0].id')
+echo "First deployment (auto): $DEPLOY9A_ID"
+wait_for_deployment "$DEPLOY9A_ID"
+
+DEPLOY9B=$(api -X POST "$BASE_URL/api/services/$SERVICE9_ID/deploy")
+DEPLOY9B_ID=$(echo "$DEPLOY9B" | jq -r '.deployment_id')
+echo "Second deployment (manual): $DEPLOY9B_ID"
+wait_for_deployment "$DEPLOY9B_ID"
+
+echo ""
+echo "=== Test 40: Verify deployment has snapshot data ==="
+DEPLOY9B_DATA=$(api "$BASE_URL/api/deployments/$DEPLOY9B_ID")
+IMAGE_NAME=$(echo "$DEPLOY9B_DATA" | jq -r '.imageName')
+ROLLBACK_ELIGIBLE=$(echo "$DEPLOY9B_DATA" | jq -r '.rollbackEligible')
+
+if [ "$IMAGE_NAME" = "null" ] || [ -z "$IMAGE_NAME" ]; then
+  echo "FAIL: Deployment should have imageName snapshot"
+  exit 1
+fi
+echo "Deployment has imageName: $IMAGE_NAME"
+
+if [ "$ROLLBACK_ELIGIBLE" != "1" ]; then
+  echo "FAIL: Deployment should be rollback-eligible (got: $ROLLBACK_ELIGIBLE)"
+  exit 1
+fi
+echo "Deployment is rollback-eligible"
+
+echo ""
+echo "=== Test 41: Rollback to first deployment ==="
+DEPLOY9A_UPDATED=$(api "$BASE_URL/api/deployments/$DEPLOY9A_ID")
+DEPLOY9A_IMAGE=$(echo "$DEPLOY9A_UPDATED" | jq -r '.imageName')
+DEPLOY9A_ELIGIBLE=$(echo "$DEPLOY9A_UPDATED" | jq -r '.rollbackEligible')
+echo "First deployment image: $DEPLOY9A_IMAGE, eligible: $DEPLOY9A_ELIGIBLE"
+
+ROLLBACK_RESULT=$(api -X POST "$BASE_URL/api/deployments/$DEPLOY9A_ID/rollback")
+ROLLBACK_DEPLOY_ID=$(echo "$ROLLBACK_RESULT" | jq -r '.deployment_id')
+
+if [ "$ROLLBACK_DEPLOY_ID" = "null" ] || [ -z "$ROLLBACK_DEPLOY_ID" ]; then
+  echo "FAIL: Rollback did not return new deployment_id"
+  echo "Response: $ROLLBACK_RESULT"
+  exit 1
+fi
+echo "Rollback created new deployment: $ROLLBACK_DEPLOY_ID"
+
+echo ""
+echo "=== Test 42: Wait for rollback deployment ==="
+wait_for_deployment "$ROLLBACK_DEPLOY_ID"
+
+ROLLBACK_DEPLOY=$(api "$BASE_URL/api/deployments/$ROLLBACK_DEPLOY_ID")
+ROLLBACK_SOURCE=$(echo "$ROLLBACK_DEPLOY" | jq -r '.rollbackSourceId')
+if [ "$ROLLBACK_SOURCE" != "$DEPLOY9A_ID" ]; then
+  echo "FAIL: Rollback deployment should have rollbackSourceId=$DEPLOY9A_ID (got: $ROLLBACK_SOURCE)"
+  exit 1
+fi
+echo "Rollback deployment correctly references source deployment"
+
+echo ""
+echo "=== Test 43: Verify rollback service responds ==="
+HOST_PORT9=$(api "$BASE_URL/api/deployments/$ROLLBACK_DEPLOY_ID" | jq -r '.hostPort')
+echo "Service running on port: $HOST_PORT9"
+
+if curl -sf "http://$SERVER_IP:$HOST_PORT9" > /dev/null; then
+  echo "Rollback service is responding!"
+else
+  echo "FAIL: Rollback service failed to respond"
+  exit 1
+fi
+
+echo ""
+echo "=== Test 44: Verify rollback blocked for database services ==="
+SERVICE9_DB=$(api -X POST "$BASE_URL/api/projects/$PROJECT9_ID/services" \
+  -d '{"name":"db-rollback-test","deployType":"database","templateId":"postgres-17"}')
+SERVICE9_DB_ID=$(echo "$SERVICE9_DB" | jq -r '.id')
+echo "Created database service: $SERVICE9_DB_ID"
+
+sleep 3
+DEPLOY9_DB_ID=$(api "$BASE_URL/api/services/$SERVICE9_DB_ID/deployments" | jq -r '.[0].id')
+echo "Using database deployment: $DEPLOY9_DB_ID"
+wait_for_deployment "$DEPLOY9_DB_ID" 45
+
+ROLLBACK_DB_RESULT=$(curl -sS -H "X-Frost-Token: $API_KEY" -H "Content-Type: application/json" \
+  -X POST "$BASE_URL/api/deployments/$DEPLOY9_DB_ID/rollback" -w "\n%{http_code}")
+ROLLBACK_DB_STATUS=$(echo "$ROLLBACK_DB_RESULT" | tail -1)
+ROLLBACK_DB_BODY=$(echo "$ROLLBACK_DB_RESULT" | head -n -1)
+
+if [ "$ROLLBACK_DB_STATUS" = "400" ]; then
+  echo "Rollback correctly blocked for database service (400)"
+else
+  echo "FAIL: Rollback should return 400 for database services (got: $ROLLBACK_DB_STATUS)"
+  echo "Body: $ROLLBACK_DB_BODY"
+  exit 1
+fi
+
+echo ""
+echo "=== Test 45: Cleanup rollback test project ==="
+api -X DELETE "$BASE_URL/api/projects/$PROJECT9_ID" > /dev/null
 echo "Deleted project"
 
 echo ""

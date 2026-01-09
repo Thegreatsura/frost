@@ -213,8 +213,7 @@ export async function runContainer(
 
 export async function stopContainer(name: string): Promise<void> {
   try {
-    await execAsync(`docker stop ${name}`);
-    await execAsync(`docker rm ${name}`);
+    await execAsync(`docker rm -f ${name}`);
   } catch {
     // Container might not exist
   }
@@ -433,6 +432,15 @@ export async function getImageSize(image: string): Promise<number> {
 export async function removeImage(image: string): Promise<boolean> {
   try {
     await execAsync(`docker rmi ${image}`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function imageExists(imageName: string): Promise<boolean> {
+  try {
+    await execAsync(`docker image inspect ${imageName}`);
     return true;
   } catch {
     return false;
