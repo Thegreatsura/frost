@@ -288,10 +288,11 @@ export async function getMetricsHistory(
         diskPercent: row.diskPercent ?? undefined,
       });
     } else if (row.type === "container" && row.containerId) {
-      if (!containers[row.containerId]) {
-        containers[row.containerId] = [];
+      const key = serviceId && row.serviceId ? row.serviceId : row.containerId;
+      if (!containers[key]) {
+        containers[key] = [];
       }
-      containers[row.containerId].push({
+      containers[key].push({
         timestamp: row.timestamp,
         cpuPercent: row.cpuPercent,
         memoryPercent: row.memoryPercent,
