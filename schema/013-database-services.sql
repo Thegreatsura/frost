@@ -1,0 +1,3 @@
+ALTER TABLE services ADD COLUMN service_type TEXT NOT NULL DEFAULT 'app';
+ALTER TABLE services ADD COLUMN volumes TEXT DEFAULT '[]';
+ALTER TABLE services ADD COLUMN tcp_proxy_port INTEGER DEFAULT NULL;

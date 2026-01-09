@@ -1,6 +1,16 @@
 "use client";
 
-import { ExternalLink, Loader2, Pencil, Rocket, Trash2 } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Copy,
+  Database,
+  ExternalLink,
+  Globe,
+  Loader2,
+  Pencil,
+  Rocket,
+  Trash2,
+} from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -11,6 +21,7 @@ import { StatusDot } from "@/components/status-dot";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { useProject } from "@/hooks/use-projects";
 import {
   useDeleteService,
@@ -20,6 +31,7 @@ import {
 } from "@/hooks/use-services";
 import type { Deployment, Domain, EnvVar } from "@/lib/api";
 import { api } from "@/lib/api";
+import { buildConnectionString } from "@/lib/db-templates";
 import { cn } from "@/lib/utils";
 import { DeploymentRow } from "./_components/deployment-row";
 import { DomainsSection } from "./_components/domains-section";
@@ -51,6 +63,31 @@ export default function ServicePage() {
   const [activeLogTab, setActiveLogTab] = useState<"build" | "runtime">(
     "build",
   );
+  const queryClient = useQueryClient();
+
+  const { data: tcpProxy } = useQuery({
+    queryKey: ["tcp-proxy", serviceId],
+    queryFn: () => api.tcpProxy.get(serviceId),
+    enabled: service?.serviceType === "database",
+  });
+
+  const enableTcpProxyMutation = useMutation({
+    mutationFn: () => api.tcpProxy.enable(serviceId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tcp-proxy", serviceId] });
+      toast.success("TCP proxy enabled");
+    },
+    onError: () => toast.error("Failed to enable TCP proxy"),
+  });
+
+  const disableTcpProxyMutation = useMutation({
+    mutationFn: () => api.tcpProxy.disable(serviceId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tcp-proxy", serviceId] });
+      toast.success("TCP proxy disabled");
+    },
+    onError: () => toast.error("Failed to disable TCP proxy"),
+  });
 
   useEffect(() => {
     api.settings.get().then((s) => setServerIp(s.serverIp));
@@ -286,6 +323,149 @@ export default function ServicePage() {
                 <p className="mt-1 font-mono text-xs text-neutral-500">
                   {runningDeployment.commitSha}
                 </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {service.serviceType === "database" && (
+            <Card className="bg-neutral-900 border-neutral-800">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-sm font-medium text-neutral-300">
+                  <Database className="h-4 w-4" />
+                  Database Connection
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {runningDeployment ? (
+                  <>
+                    <div>
+                      <p className="mb-1 text-xs text-neutral-500">
+                        Internal Connection (within project)
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 rounded bg-neutral-800 px-3 py-2 font-mono text-xs text-neutral-300">
+                          {buildConnectionString(
+                            service.imageUrl?.split(":")[0] ?? "",
+                            service.name,
+                            service.containerPort ?? 5432,
+                            JSON.parse(service.envVars).reduce(
+                              (acc: Record<string, string>, v: EnvVar) => {
+                                acc[v.key] = v.value;
+                                return acc;
+                              },
+                              {},
+                            ),
+                          )}
+                        </code>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            navigator.clipboard.writeText(
+                              buildConnectionString(
+                                service.imageUrl?.split(":")[0] ?? "",
+                                service.name,
+                                service.containerPort ?? 5432,
+                                JSON.parse(service.envVars).reduce(
+                                  (acc: Record<string, string>, v: EnvVar) => {
+                                    acc[v.key] = v.value;
+                                    return acc;
+                                  },
+                                  {},
+                                ),
+                              ),
+                            );
+                            toast.success("Copied to clipboard");
+                          }}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-neutral-800 pt-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="flex items-center gap-2 text-sm text-neutral-300">
+                            <Globe className="h-4 w-4" />
+                            Public Access (TCP Proxy)
+                          </span>
+                          <p className="mt-0.5 text-xs text-neutral-500">
+                            Expose database to external connections
+                          </p>
+                        </div>
+                        <Switch
+                          checked={tcpProxy?.enabled ?? false}
+                          disabled={
+                            enableTcpProxyMutation.isPending ||
+                            disableTcpProxyMutation.isPending
+                          }
+                          onCheckedChange={(checked: boolean) => {
+                            if (checked) {
+                              enableTcpProxyMutation.mutate();
+                            } else {
+                              disableTcpProxyMutation.mutate();
+                            }
+                          }}
+                        />
+                      </div>
+
+                      {tcpProxy?.enabled && tcpProxy.port && (
+                        <div className="mt-3">
+                          <p className="mb-1 text-xs text-neutral-500">
+                            External Connection
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <code className="flex-1 rounded bg-neutral-800 px-3 py-2 font-mono text-xs text-neutral-300">
+                              {buildConnectionString(
+                                service.imageUrl?.split(":")[0] ?? "",
+                                serverIp || "localhost",
+                                tcpProxy.port,
+                                JSON.parse(service.envVars).reduce(
+                                  (acc: Record<string, string>, v: EnvVar) => {
+                                    acc[v.key] = v.value;
+                                    return acc;
+                                  },
+                                  {},
+                                ),
+                              )}
+                            </code>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                navigator.clipboard.writeText(
+                                  buildConnectionString(
+                                    service.imageUrl?.split(":")[0] ?? "",
+                                    serverIp || "localhost",
+                                    tcpProxy.port!,
+                                    JSON.parse(service.envVars).reduce(
+                                      (
+                                        acc: Record<string, string>,
+                                        v: EnvVar,
+                                      ) => {
+                                        acc[v.key] = v.value;
+                                        return acc;
+                                      },
+                                      {},
+                                    ),
+                                  ),
+                                );
+                                toast.success("Copied to clipboard");
+                              }}
+                            >
+                              <Copy className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm text-neutral-500">
+                    Deploy the database to view connection details.
+                  </p>
+                )}
               </CardContent>
             </Card>
           )}

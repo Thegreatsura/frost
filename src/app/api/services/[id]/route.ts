@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { stopContainer } from "@/lib/docker";
 import { syncCaddyConfig, updateSystemDomain } from "@/lib/domains";
+import { buildVolumeName, removeVolume } from "@/lib/volumes";
 
 export async function GET(
   request: Request,
@@ -129,6 +130,12 @@ export async function DELETE(
 ) {
   const { id } = await params;
 
+  const service = await db
+    .selectFrom("services")
+    .select(["serviceType", "volumes"])
+    .where("id", "=", id)
+    .executeTakeFirst();
+
   const deployments = await db
     .selectFrom("deployments")
     .select("containerId")
@@ -138,6 +145,16 @@ export async function DELETE(
   for (const deployment of deployments) {
     if (deployment.containerId) {
       await stopContainer(deployment.containerId);
+    }
+  }
+
+  if (service?.serviceType === "database" && service.volumes) {
+    const volumeConfig = JSON.parse(service.volumes) as {
+      name: string;
+      path: string;
+    }[];
+    for (const v of volumeConfig) {
+      await removeVolume(buildVolumeName(id, v.name));
     }
   }
 

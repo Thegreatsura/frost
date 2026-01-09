@@ -13,6 +13,7 @@ import {
   pullImage,
   runContainer,
   stopContainer,
+  type VolumeMount,
   waitForHealthy,
 } from "./docker";
 import { syncCaddyConfig } from "./domains";
@@ -24,6 +25,7 @@ import {
   isGitHubRepo,
 } from "./github";
 import type { EnvVar } from "./types";
+import { buildVolumeName, createVolume } from "./volumes";
 
 const execAsync = promisify(exec);
 
@@ -329,6 +331,24 @@ async function runServiceDeployment(
 
     await createNetwork(networkName, baseLabels);
 
+    let volumes: VolumeMount[] | undefined;
+    if (service.serviceType === "database" && service.volumes) {
+      const volumeConfig = JSON.parse(service.volumes) as {
+        name: string;
+        path: string;
+      }[];
+      volumes = [];
+      for (const v of volumeConfig) {
+        const volumeName = buildVolumeName(service.id, v.name);
+        await createVolume(volumeName);
+        volumes.push({ name: volumeName, path: v.path });
+      }
+      await appendLog(
+        deploymentId,
+        `Created ${volumes.length} volume(s) for database\n`,
+      );
+    }
+
     const hostPort = await getAvailablePort();
     const runResult = await runContainer({
       imageName,
@@ -342,6 +362,7 @@ async function runServiceDeployment(
         ...baseLabels,
         "frost.deployment.id": deploymentId,
       },
+      volumes,
     });
 
     if (!runResult.success) {

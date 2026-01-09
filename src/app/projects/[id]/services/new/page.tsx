@@ -1,6 +1,7 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Database, Loader2 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
@@ -21,10 +22,11 @@ import { Separator } from "@/components/ui/separator";
 import { useProject } from "@/hooks/use-projects";
 import { useCreateService } from "@/hooks/use-services";
 import type { CreateServiceInput, EnvVar } from "@/lib/api";
+import { api } from "@/lib/api";
 import { SERVICE_TEMPLATES } from "@/lib/templates";
 import { RepoSelector } from "./_components/repo-selector";
 
-type DeployType = "repo" | "image";
+type DeployType = "repo" | "image" | "database";
 
 export default function NewServicePage() {
   const params = useParams();
@@ -42,9 +44,15 @@ export default function NewServicePage() {
   } | null>(null);
   const [showManualInput, setShowManualInput] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<string>("");
+  const [selectedDbTemplate, setSelectedDbTemplate] = useState<string>("");
   const nameInputRef = useRef<HTMLInputElement>(null);
   const imageUrlRef = useRef<HTMLInputElement>(null);
   const containerPortRef = useRef<HTMLInputElement>(null);
+
+  const { data: dbTemplates } = useQuery({
+    queryKey: ["db-templates"],
+    queryFn: () => api.dbTemplates.list(),
+  });
 
   function handleTemplateChange(templateId: string) {
     setSelectedTemplate(templateId);
@@ -59,6 +67,14 @@ export default function NewServicePage() {
       if (nameInputRef.current && !nameInputRef.current.value) {
         nameInputRef.current.value = template.id;
       }
+    }
+  }
+
+  function handleDbTemplateChange(templateId: string) {
+    setSelectedDbTemplate(templateId);
+    const template = dbTemplates?.find((t) => t.id === templateId);
+    if (template && nameInputRef.current && !nameInputRef.current.value) {
+      nameInputRef.current.value = template.id.split("-")[0];
     }
   }
 
@@ -83,8 +99,10 @@ export default function NewServicePage() {
       data.branch = (formData.get("branch") as string) || "main";
       data.dockerfile_path =
         (formData.get("dockerfile_path") as string) || "Dockerfile";
-    } else {
+    } else if (deployType === "image") {
       data.image_url = formData.get("image_url") as string;
+    } else if (deployType === "database") {
+      data.template_id = selectedDbTemplate;
     }
 
     try {
@@ -135,7 +153,7 @@ export default function NewServicePage() {
 
                   <div className="grid gap-3">
                     <Label className="text-neutral-300">Deploy Type</Label>
-                    <div className="flex gap-4">
+                    <div className="flex flex-wrap gap-4">
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="radio"
@@ -162,13 +180,27 @@ export default function NewServicePage() {
                           Use Docker Image
                         </span>
                       </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="deploy_type"
+                          value="database"
+                          checked={deployType === "database"}
+                          onChange={() => setDeployType("database")}
+                          className="accent-blue-500"
+                        />
+                        <span className="flex items-center gap-1.5 text-sm text-neutral-300">
+                          <Database className="h-3.5 w-3.5" />
+                          Database
+                        </span>
+                      </label>
                     </div>
                   </div>
                 </div>
 
                 <Separator className="bg-neutral-800" />
 
-                {deployType === "repo" ? (
+                {deployType === "repo" && (
                   <div className="space-y-4">
                     <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">
                       Import Git Repository
@@ -291,7 +323,9 @@ export default function NewServicePage() {
                       </div>
                     )}
                   </div>
-                ) : (
+                )}
+
+                {deployType === "image" && (
                   <div className="space-y-4">
                     <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">
                       Image Settings
@@ -340,49 +374,120 @@ export default function NewServicePage() {
                   </div>
                 )}
 
-                <Separator className="bg-neutral-800" />
-
-                <div className="space-y-4">
-                  <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">
-                    Container Settings
-                  </p>
-
-                  <div className="grid gap-3">
-                    <Label
-                      htmlFor="container_port"
-                      className="text-neutral-300"
-                    >
-                      Container Port
-                    </Label>
-                    <Input
-                      ref={containerPortRef}
-                      id="container_port"
-                      name="container_port"
-                      type="number"
-                      placeholder="8080"
-                      defaultValue="8080"
-                      min={1}
-                      max={65535}
-                      className="border-neutral-700 bg-neutral-800 font-mono text-sm text-neutral-100 placeholder:text-neutral-500"
-                    />
-                    <p className="text-xs text-neutral-500">
-                      Port your container listens on. Use this if your image
-                      ignores the PORT env var.
+                {deployType === "database" && (
+                  <div className="space-y-4">
+                    <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">
+                      Database Settings
                     </p>
+
+                    <div className="grid gap-3">
+                      <Label className="text-neutral-300">Database Type</Label>
+                      <Select
+                        value={selectedDbTemplate}
+                        onValueChange={handleDbTemplateChange}
+                        required
+                      >
+                        <SelectTrigger className="border-neutral-700 bg-neutral-800 text-neutral-100">
+                          <SelectValue placeholder="Select a database" />
+                        </SelectTrigger>
+                        <SelectContent className="border-neutral-700 bg-neutral-800">
+                          {dbTemplates?.map((t) => (
+                            <SelectItem
+                              key={t.id}
+                              value={t.id}
+                              className="text-neutral-100 focus:bg-neutral-700 focus:text-neutral-100"
+                            >
+                              <span className="flex items-center gap-2">
+                                <Database className="h-3.5 w-3.5 text-neutral-400" />
+                                {t.name}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {selectedDbTemplate && (
+                      <div className="rounded-lg border border-neutral-700 bg-neutral-800/50 p-3 text-xs text-neutral-400">
+                        <p className="mb-2 font-medium text-neutral-300">
+                          Auto-configured:
+                        </p>
+                        <ul className="space-y-1">
+                          <li>
+                            Image:{" "}
+                            <code className="text-neutral-300">
+                              {
+                                dbTemplates?.find(
+                                  (t) => t.id === selectedDbTemplate,
+                                )?.image
+                              }
+                            </code>
+                          </li>
+                          <li>
+                            Port:{" "}
+                            <code className="text-neutral-300">
+                              {
+                                dbTemplates?.find(
+                                  (t) => t.id === selectedDbTemplate,
+                                )?.containerPort
+                              }
+                            </code>
+                          </li>
+                          <li>Volume mounted for data persistence</li>
+                          <li>Credentials auto-generated</li>
+                        </ul>
+                      </div>
+                    )}
                   </div>
-                </div>
+                )}
 
-                <Separator className="bg-neutral-800" />
+                {deployType !== "database" && (
+                  <>
+                    <Separator className="bg-neutral-800" />
 
-                <div className="space-y-4">
-                  <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">
-                    Service Environment Variables
-                  </p>
-                  <p className="text-xs text-neutral-500">
-                    These are in addition to any shared project variables.
-                  </p>
-                  <EnvVarEditor value={envVars} onChange={setEnvVars} />
-                </div>
+                    <div className="space-y-4">
+                      <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">
+                        Container Settings
+                      </p>
+
+                      <div className="grid gap-3">
+                        <Label
+                          htmlFor="container_port"
+                          className="text-neutral-300"
+                        >
+                          Container Port
+                        </Label>
+                        <Input
+                          ref={containerPortRef}
+                          id="container_port"
+                          name="container_port"
+                          type="number"
+                          placeholder="8080"
+                          defaultValue="8080"
+                          min={1}
+                          max={65535}
+                          className="border-neutral-700 bg-neutral-800 font-mono text-sm text-neutral-100 placeholder:text-neutral-500"
+                        />
+                        <p className="text-xs text-neutral-500">
+                          Port your container listens on. Use this if your image
+                          ignores the PORT env var.
+                        </p>
+                      </div>
+                    </div>
+
+                    <Separator className="bg-neutral-800" />
+
+                    <div className="space-y-4">
+                      <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">
+                        Service Environment Variables
+                      </p>
+                      <p className="text-xs text-neutral-500">
+                        These are in addition to any shared project variables.
+                      </p>
+                      <EnvVarEditor value={envVars} onChange={setEnvVars} />
+                    </div>
+                  </>
+                )}
 
                 <Separator className="bg-neutral-800" />
 

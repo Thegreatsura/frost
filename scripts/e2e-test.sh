@@ -501,6 +501,107 @@ DELETE FROM settings WHERE key LIKE 'github_app_%';
 echo "Deleted project and cleaned up test GitHub App credentials"
 
 echo ""
+echo "########################################"
+echo "# Test Group 7: Database Services"
+echo "########################################"
+
+echo ""
+echo "=== Test 31: Get database templates ==="
+TEMPLATES=$(api "$BASE_URL/api/db-templates")
+POSTGRES_FOUND=$(echo "$TEMPLATES" | jq -r '.[] | select(.id == "postgres-17") | .id')
+if [ "$POSTGRES_FOUND" != "postgres-17" ]; then
+  echo "FAIL: postgres-17 template not found"
+  exit 1
+fi
+echo "Database templates available (postgres-17 found)"
+
+echo ""
+echo "=== Test 32: Create database service ==="
+PROJECT8=$(api -X POST "$BASE_URL/api/projects" -d '{"name":"e2e-database"}')
+PROJECT8_ID=$(echo "$PROJECT8" | jq -r '.id')
+echo "Created project: $PROJECT8_ID"
+
+SERVICE8=$(api -X POST "$BASE_URL/api/projects/$PROJECT8_ID/services" \
+  -d '{"name":"postgres","deployType":"database","templateId":"postgres-17"}')
+SERVICE8_ID=$(echo "$SERVICE8" | jq -r '.id')
+SERVICE8_TYPE=$(echo "$SERVICE8" | jq -r '.serviceType')
+
+if [ "$SERVICE8_ID" = "null" ] || [ -z "$SERVICE8_ID" ]; then
+  echo "FAIL: Failed to create database service"
+  echo "$SERVICE8" | jq
+  exit 1
+fi
+
+if [ "$SERVICE8_TYPE" != "database" ]; then
+  echo "FAIL: Service type should be 'database', got: $SERVICE8_TYPE"
+  exit 1
+fi
+echo "Created database service: $SERVICE8_ID (type: $SERVICE8_TYPE)"
+
+echo ""
+echo "=== Test 33: Verify database env vars ==="
+SERVICE8_ENVVARS=$(echo "$SERVICE8" | jq -r '.envVars')
+POSTGRES_USER=$(echo "$SERVICE8_ENVVARS" | jq -r '.[] | select(.key == "POSTGRES_USER") | .value')
+POSTGRES_PASSWORD=$(echo "$SERVICE8_ENVVARS" | jq -r '.[] | select(.key == "POSTGRES_PASSWORD") | .value')
+
+if [ -z "$POSTGRES_USER" ]; then
+  echo "FAIL: POSTGRES_USER not set"
+  exit 1
+fi
+if [ -z "$POSTGRES_PASSWORD" ] || [ ${#POSTGRES_PASSWORD} -lt 16 ]; then
+  echo "FAIL: POSTGRES_PASSWORD not generated or too short"
+  exit 1
+fi
+echo "Database credentials auto-generated (password length: ${#POSTGRES_PASSWORD})"
+
+echo ""
+echo "=== Test 34: Deploy database service ==="
+DEPLOY8=$(api -X POST "$BASE_URL/api/services/$SERVICE8_ID/deploy")
+DEPLOY8_ID=$(echo "$DEPLOY8" | jq -r '.deployment_id')
+echo "Started deployment: $DEPLOY8_ID"
+wait_for_deployment "$DEPLOY8_ID" 45
+
+echo ""
+echo "=== Test 35: Verify database is accepting connections ==="
+HOST_PORT8=$(api "$BASE_URL/api/deployments/$DEPLOY8_ID" | jq -r '.hostPort')
+echo "Database running on port: $HOST_PORT8"
+
+PG_READY=$(remote "timeout 10 bash -c 'until pg_isready -h localhost -p $HOST_PORT8; do sleep 1; done' && echo 'ready'" 2>&1 || echo "not ready")
+if echo "$PG_READY" | grep -q "ready"; then
+  echo "PostgreSQL is accepting connections!"
+else
+  echo "PostgreSQL connection check (non-fatal): $PG_READY"
+fi
+
+echo ""
+echo "=== Test 36: Verify volume was created ==="
+EXPECTED_VOLUME="frost-${SERVICE8_ID}-data"
+VOLUME_EXISTS=$(remote "docker volume ls --filter name=$EXPECTED_VOLUME --format '{{.Name}}'" 2>&1)
+if echo "$VOLUME_EXISTS" | grep -q "$EXPECTED_VOLUME"; then
+  echo "Volume created: $EXPECTED_VOLUME"
+else
+  echo "FAIL: Volume $EXPECTED_VOLUME not found"
+  exit 1
+fi
+
+echo ""
+echo "=== Test 37: Delete database service and verify cleanup ==="
+api -X DELETE "$BASE_URL/api/services/$SERVICE8_ID" > /dev/null
+sleep 2
+
+VOLUME_AFTER=$(remote "docker volume ls --filter name=$EXPECTED_VOLUME --format '{{.Name}}'" 2>&1)
+if echo "$VOLUME_AFTER" | grep -q "$EXPECTED_VOLUME"; then
+  echo "FAIL: Volume should have been deleted"
+  exit 1
+fi
+echo "Volume deleted with service"
+
+echo ""
+echo "=== Test 38: Cleanup database test project ==="
+api -X DELETE "$BASE_URL/api/projects/$PROJECT8_ID" > /dev/null
+echo "Deleted project"
+
+echo ""
 echo "========================================="
 echo "All E2E tests passed!"
 echo "========================================="

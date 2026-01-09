@@ -31,6 +31,9 @@ export interface Service {
   healthCheckPath: string | null;
   healthCheckTimeout: number | null;
   createdAt: number;
+  serviceType: "app" | "database";
+  volumes: string | null;
+  tcpProxyPort: number | null;
   latestDeployment?: Deployment;
 }
 
@@ -111,13 +114,30 @@ export interface UpdateProjectInput {
 
 export interface CreateServiceInput {
   name: string;
-  deploy_type: "repo" | "image";
+  deploy_type: "repo" | "image" | "database";
   repo_url?: string;
   branch?: string;
   dockerfile_path?: string;
   image_url?: string;
   env_vars?: EnvVar[];
   container_port?: number;
+  template_id?: string;
+}
+
+export interface DatabaseTemplate {
+  id: string;
+  name: string;
+  image: string;
+  containerPort: number;
+  envVars: { key: string; value: string; generated?: boolean }[];
+  volumes: { name: string; path: string }[];
+  healthCheckTimeout: number;
+}
+
+export interface TcpProxyStatus {
+  enabled: boolean;
+  port: number | null;
+  hostPort: number | null;
 }
 
 export interface UpdateServiceInput {
@@ -261,5 +281,29 @@ export const api = {
   settings: {
     get: (): Promise<Settings> =>
       fetch("/api/settings").then((r) => handleResponse<Settings>(r)),
+  },
+
+  dbTemplates: {
+    list: (): Promise<DatabaseTemplate[]> =>
+      fetch("/api/db-templates").then((r) =>
+        handleResponse<DatabaseTemplate[]>(r),
+      ),
+  },
+
+  tcpProxy: {
+    get: (serviceId: string): Promise<TcpProxyStatus> =>
+      fetch(`/api/services/${serviceId}/tcp-proxy`).then((r) =>
+        handleResponse<TcpProxyStatus>(r),
+      ),
+
+    enable: (serviceId: string): Promise<TcpProxyStatus> =>
+      fetch(`/api/services/${serviceId}/tcp-proxy`, { method: "POST" }).then(
+        (r) => handleResponse<TcpProxyStatus>(r),
+      ),
+
+    disable: (serviceId: string): Promise<TcpProxyStatus> =>
+      fetch(`/api/services/${serviceId}/tcp-proxy`, { method: "DELETE" }).then(
+        (r) => handleResponse<TcpProxyStatus>(r),
+      ),
   },
 };

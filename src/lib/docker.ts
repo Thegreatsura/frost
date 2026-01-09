@@ -130,6 +130,11 @@ export async function pullImage(imageName: string): Promise<BuildResult> {
 
 const DEFAULT_PORT = 8080;
 
+export interface VolumeMount {
+  name: string;
+  path: string;
+}
+
 export interface RunContainerOptions {
   imageName: string;
   hostPort: number;
@@ -139,6 +144,7 @@ export interface RunContainerOptions {
   network?: string;
   hostname?: string;
   labels?: Record<string, string>;
+  volumes?: VolumeMount[];
 }
 
 export async function runContainer(
@@ -153,6 +159,7 @@ export async function runContainer(
     network,
     hostname,
     labels,
+    volumes,
   } = options;
   try {
     await stopContainer(name);
@@ -168,9 +175,12 @@ export async function runContainer(
           .map(([k, v]) => `--label ${k}=${JSON.stringify(v)}`)
           .join(" ")
       : "";
+    const volumeFlags = volumes
+      ? volumes.map((v) => `-v ${v.name}:${v.path}`).join(" ")
+      : "";
     const logOpts = "--log-opt max-size=10m --log-opt max-file=3";
     const { stdout } = await execAsync(
-      `docker run -d --restart on-failure:5 ${logOpts} --name ${name} -p ${hostPort}:${containerPort} ${networkFlag} ${hostnameFlag} ${labelFlags} ${envFlags} ${imageName}`.replace(
+      `docker run -d --restart on-failure:5 ${logOpts} --name ${name} -p ${hostPort}:${containerPort} ${networkFlag} ${hostnameFlag} ${labelFlags} ${volumeFlags} ${envFlags} ${imageName}`.replace(
         /\s+/g,
         " ",
       ),

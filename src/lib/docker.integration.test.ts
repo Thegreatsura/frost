@@ -6,6 +6,12 @@ import {
   stopContainer,
   waitForHealthy,
 } from "./docker";
+import {
+  createVolume,
+  listFrostVolumes,
+  removeVolume,
+  volumeExists,
+} from "./volumes";
 
 const TEST_IMAGE = "frost-test-health-check:latest";
 const TEST_CONTAINER = "frost-test-health-check";
@@ -106,5 +112,57 @@ describe("health check integration", () => {
 
     expect(healthy).toBe(false);
     await stopContainer(TEST_CONTAINER);
+  }, 60000);
+});
+
+describe("volume integration", () => {
+  const TEST_VOLUME_NAME = "frost-test-volume-integration";
+
+  afterAll(async () => {
+    await removeVolume(TEST_VOLUME_NAME);
+  });
+
+  test("createVolume creates a volume", async () => {
+    await removeVolume(TEST_VOLUME_NAME);
+
+    await createVolume(TEST_VOLUME_NAME);
+    const exists = await volumeExists(TEST_VOLUME_NAME);
+    expect(exists).toBe(true);
+  });
+
+  test("volumeExists returns false for non-existent volume", async () => {
+    const exists = await volumeExists("frost-nonexistent-volume-12345");
+    expect(exists).toBe(false);
+  });
+
+  test("removeVolume removes a volume", async () => {
+    await createVolume(TEST_VOLUME_NAME);
+    await removeVolume(TEST_VOLUME_NAME);
+    const exists = await volumeExists(TEST_VOLUME_NAME);
+    expect(exists).toBe(false);
+  });
+
+  test("listFrostVolumes returns frost volumes", async () => {
+    await createVolume(TEST_VOLUME_NAME);
+    const volumes = await listFrostVolumes();
+    expect(volumes).toContain(TEST_VOLUME_NAME);
+    await removeVolume(TEST_VOLUME_NAME);
+  });
+
+  test("runContainer with volumes mounts volume", async () => {
+    const volumeName = "frost-test-container-volume";
+    await createVolume(volumeName);
+
+    const run = await runContainer({
+      imageName: TEST_IMAGE,
+      hostPort: TEST_PORT,
+      containerPort: 8080,
+      name: TEST_CONTAINER,
+      volumes: [{ name: volumeName, path: "/data" }],
+    });
+
+    expect(run.success).toBe(true);
+    await stopContainer(TEST_CONTAINER);
+    await removeVolume(volumeName);
   }, 60000);
 });

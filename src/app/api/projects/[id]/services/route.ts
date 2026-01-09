@@ -1,6 +1,7 @@
 import { nanoid } from "nanoid";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { generateCredential, getTemplate } from "@/lib/db-templates";
 import { createSystemDomain } from "@/lib/domains";
 
 export async function GET(
@@ -50,6 +51,7 @@ export async function POST(
     imageUrl,
     envVars = [],
     containerPort,
+    templateId,
   } = body;
 
   if (!name) {
@@ -68,6 +70,23 @@ export async function POST(
       { error: "imageUrl is required for image deployments" },
       { status: 400 },
     );
+  }
+
+  if (deployType === "database" && !templateId) {
+    return NextResponse.json(
+      { error: "templateId is required for database deployments" },
+      { status: 400 },
+    );
+  }
+
+  if (deployType === "database") {
+    const template = getTemplate(templateId);
+    if (!template) {
+      return NextResponse.json(
+        { error: "Unknown database template" },
+        { status: 400 },
+      );
+    }
   }
 
   if (
@@ -107,23 +126,52 @@ export async function POST(
   const id = nanoid();
   const now = Date.now();
 
-  await db
-    .insertInto("services")
-    .values({
-      id,
-      projectId: projectId,
-      name,
-      deployType,
-      repoUrl: deployType === "repo" ? repoUrl : null,
-      branch: deployType === "repo" ? branch : null,
-      dockerfilePath: deployType === "repo" ? dockerfilePath : null,
-      imageUrl: deployType === "image" ? imageUrl : null,
-      envVars: JSON.stringify(envVars),
-      containerPort: containerPort ?? null,
-      autoDeploy: deployType === "repo" ? 1 : 0,
-      createdAt: now,
-    })
-    .execute();
+  if (deployType === "database") {
+    const template = getTemplate(templateId)!;
+    const dbEnvVars = template.envVars.map((e) => ({
+      key: e.key,
+      value: e.generated ? generateCredential() : e.value,
+    }));
+
+    await db
+      .insertInto("services")
+      .values({
+        id,
+        projectId: projectId,
+        name,
+        deployType: "image",
+        repoUrl: null,
+        branch: null,
+        dockerfilePath: null,
+        imageUrl: template.image,
+        envVars: JSON.stringify(dbEnvVars),
+        containerPort: template.containerPort,
+        healthCheckTimeout: template.healthCheckTimeout,
+        autoDeploy: 0,
+        serviceType: "database",
+        volumes: JSON.stringify(template.volumes),
+        createdAt: now,
+      })
+      .execute();
+  } else {
+    await db
+      .insertInto("services")
+      .values({
+        id,
+        projectId: projectId,
+        name,
+        deployType,
+        repoUrl: deployType === "repo" ? repoUrl : null,
+        branch: deployType === "repo" ? branch : null,
+        dockerfilePath: deployType === "repo" ? dockerfilePath : null,
+        imageUrl: deployType === "image" ? imageUrl : null,
+        envVars: JSON.stringify(envVars),
+        containerPort: containerPort ?? null,
+        autoDeploy: deployType === "repo" ? 1 : 0,
+        createdAt: now,
+      })
+      .execute();
+  }
 
   await createSystemDomain(id, name, project.name);
 

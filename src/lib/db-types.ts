@@ -84,6 +84,9 @@ export interface Service {
   healthCheckPath: Generated<string | null>;
   healthCheckTimeout: Generated<number | null>;
   autoDeploy: Generated<number | null>;
+  serviceType: Generated<string>;
+  volumes: Generated<string | null>;
+  tcpProxyPort: Generated<number | null>;
 }
 
 export interface Setting {
