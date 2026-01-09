@@ -62,6 +62,21 @@ export interface GithubInstallation {
   createdAt: number;
 }
 
+export interface Metric {
+  id: Generated<number>;
+  timestamp: number;
+  'type': string;
+  containerId: string | null;
+  serviceId: string | null;
+  cpuPercent: number;
+  memoryPercent: number;
+  memoryBytes: number | null;
+  networkRx: number | null;
+  networkTx: number | null;
+  diskPercent: number | null;
+  createdAt: Generated<string | null>;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -99,6 +114,7 @@ export interface DB {
   deployments: Deployment;
   domains: Domain;
   githubInstallations: GithubInstallation;
+  metrics: Metric;
   projects: Project;
   services: Service;
   settings: Setting;

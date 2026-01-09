@@ -2,6 +2,7 @@ import { nanoid } from "nanoid";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { generateCredential, getTemplate } from "@/lib/db-templates";
+import { deployService } from "@/lib/deployer";
 import { createSystemDomain } from "@/lib/domains";
 import { generateSelfSignedCert } from "@/lib/ssl";
 
@@ -187,6 +188,10 @@ export async function POST(
     .selectAll()
     .where("id", "=", id)
     .executeTakeFirst();
+
+  deployService(id).catch((err) => {
+    console.error(`Auto-deploy failed for service ${id}:`, err);
+  });
 
   return NextResponse.json(service, { status: 201 });
 }

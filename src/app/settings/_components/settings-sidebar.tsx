@@ -10,6 +10,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { id: "general", label: "General", href: "/settings" },
+  { id: "monitoring", label: "Monitoring", href: "/settings/monitoring" },
   { id: "domain", label: "Domain & SSL", href: "/settings/domain" },
   { id: "github", label: "GitHub", href: "/settings/github" },
   { id: "cleanup", label: "Cleanup", href: "/settings/cleanup" },

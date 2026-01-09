@@ -114,14 +114,14 @@ export interface UpdateProjectInput {
 
 export interface CreateServiceInput {
   name: string;
-  deploy_type: "repo" | "image" | "database";
-  repo_url?: string;
+  deployType: "repo" | "image" | "database";
+  repoUrl?: string;
   branch?: string;
-  dockerfile_path?: string;
-  image_url?: string;
-  env_vars?: EnvVar[];
-  container_port?: number;
-  template_id?: string;
+  dockerfilePath?: string;
+  imageUrl?: string;
+  envVars?: EnvVar[];
+  containerPort?: number;
+  templateId?: string;
 }
 
 export interface DatabaseTemplate {
@@ -138,6 +138,50 @@ export interface TcpProxyStatus {
   enabled: boolean;
   port: number | null;
   hostPort: number | null;
+}
+
+export interface ContainerStats {
+  containerId: string;
+  name: string;
+  cpuPercent: number;
+  memoryUsage: number;
+  memoryLimit: number;
+  memoryPercent: number;
+  networkRx: number;
+  networkTx: number;
+  serviceId: string | null;
+}
+
+export interface SystemStats {
+  cpuPercent: number;
+  cpuCores: number;
+  memoryUsed: number;
+  memoryTotal: number;
+  memoryPercent: number;
+  diskUsed: number;
+  diskTotal: number;
+  diskPercent: number;
+}
+
+export interface MonitoringSnapshot {
+  timestamp: number;
+  system: SystemStats;
+  containers: ContainerStats[];
+}
+
+export interface MetricsHistoryPoint {
+  timestamp: number;
+  cpuPercent: number;
+  memoryPercent: number;
+  memoryBytes?: number;
+  diskPercent?: number;
+  containerId?: string;
+  serviceId?: string;
+}
+
+export interface MetricsHistory {
+  system: MetricsHistoryPoint[];
+  containers: Record<string, MetricsHistoryPoint[]>;
 }
 
 export interface UpdateServiceInput {
@@ -305,5 +349,25 @@ export const api = {
       fetch(`/api/services/${serviceId}/tcp-proxy`, { method: "DELETE" }).then(
         (r) => handleResponse<TcpProxyStatus>(r),
       ),
+  },
+
+  monitoring: {
+    getStats: (): Promise<MonitoringSnapshot> =>
+      fetch("/api/monitoring/stats").then((r) =>
+        handleResponse<MonitoringSnapshot>(r),
+      ),
+
+    getHistory: (range: string, type?: string): Promise<MetricsHistory> =>
+      fetch(
+        `/api/monitoring/history?range=${range}${type ? `&type=${type}` : ""}`,
+      ).then((r) => handleResponse<MetricsHistory>(r)),
+
+    getServiceHistory: (
+      serviceId: string,
+      range: string,
+    ): Promise<MetricsHistory> =>
+      fetch(
+        `/api/monitoring/history?range=${range}&serviceId=${serviceId}`,
+      ).then((r) => handleResponse<MetricsHistory>(r)),
   },
 };

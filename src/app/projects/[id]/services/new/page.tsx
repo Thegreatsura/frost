@@ -89,20 +89,20 @@ export default function NewServicePage() {
 
     const data: CreateServiceInput = {
       name: formData.get("name") as string,
-      deploy_type: deployType,
-      env_vars: validEnvVars,
-      container_port: containerPort || 8080,
+      deployType: deployType,
+      envVars: validEnvVars,
+      containerPort: containerPort || 8080,
     };
 
     if (deployType === "repo") {
-      data.repo_url = formData.get("repo_url") as string;
+      data.repoUrl = formData.get("repo_url") as string;
       data.branch = (formData.get("branch") as string) || "main";
-      data.dockerfile_path =
+      data.dockerfilePath =
         (formData.get("dockerfile_path") as string) || "Dockerfile";
     } else if (deployType === "image") {
-      data.image_url = formData.get("image_url") as string;
+      data.imageUrl = formData.get("image_url") as string;
     } else if (deployType === "database") {
-      data.template_id = selectedDbTemplate;
+      data.templateId = selectedDbTemplate;
     }
 
     try {

@@ -37,6 +37,7 @@ import { cn } from "@/lib/utils";
 import { DeploymentRow } from "./_components/deployment-row";
 import { DomainsSection } from "./_components/domains-section";
 import { RuntimeLogs } from "./_components/runtime-logs";
+import { ServiceMetricsCard } from "./_components/service-metrics-card";
 
 export default function ServicePage() {
   const params = useParams();
@@ -327,6 +328,8 @@ export default function ServicePage() {
               </CardContent>
             </Card>
           )}
+
+          {runningDeployment && <ServiceMetricsCard serviceId={serviceId} />}
 
           {service.serviceType === "database" && (
             <Card className="bg-neutral-900 border-neutral-800">
