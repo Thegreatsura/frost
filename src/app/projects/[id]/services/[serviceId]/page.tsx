@@ -696,11 +696,13 @@ export default function ServicePage() {
             </CardContent>
           </Card>
 
-          <DomainsSection
-            serviceId={serviceId}
-            hasRunningDeployment={!!runningDeployment}
-            serverIp={serverIp}
-          />
+          {service.serviceType !== "database" && (
+            <DomainsSection
+              serviceId={serviceId}
+              hasRunningDeployment={!!runningDeployment}
+              serverIp={serverIp}
+            />
+          )}
 
           <Card className="bg-neutral-900 border-neutral-800">
             <CardHeader className="pb-2">

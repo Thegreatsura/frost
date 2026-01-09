@@ -173,7 +173,9 @@ export async function POST(
       .execute();
   }
 
-  await createSystemDomain(id, name, project.name);
+  if (deployType !== "database") {
+    await createSystemDomain(id, name, project.name);
+  }
 
   const service = await db
     .selectFrom("services")

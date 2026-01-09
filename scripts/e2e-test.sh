@@ -539,6 +539,16 @@ fi
 echo "Created database service: $SERVICE8_ID (type: $SERVICE8_TYPE)"
 
 echo ""
+echo "=== Test 32b: Verify database service has no system domain ==="
+DOMAINS8=$(api "$BASE_URL/api/services/$SERVICE8_ID/domains")
+DOMAIN_COUNT=$(echo "$DOMAINS8" | jq 'length')
+if [ "$DOMAIN_COUNT" != "0" ]; then
+  echo "FAIL: Database service should not have domains, got: $DOMAIN_COUNT"
+  exit 1
+fi
+echo "Database service has no system domain (correct!)"
+
+echo ""
 echo "=== Test 33: Verify database env vars ==="
 SERVICE8_ENVVARS=$(echo "$SERVICE8" | jq -r '.envVars')
 POSTGRES_USER=$(echo "$SERVICE8_ENVVARS" | jq -r '.[] | select(.key == "POSTGRES_USER") | .value')
