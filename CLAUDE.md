@@ -2,6 +2,8 @@
 
 Simple deployment platform. Docker-only, single-user.
 
+See also: `CLAUDE.local.md` for local/personal instructions (gitignored).
+
 ## Concepts
 
 **Project** - container for related services. Has project-level env vars inherited by all services.
