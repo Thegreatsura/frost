@@ -137,3 +137,4 @@ Keep messages short (<50 chars title). Body optional for context.
 ```bash
 gh workflow run release.yml -f version=patch  # or minor, major
 ```
+**Never create releases manually** - always use the workflow above.
