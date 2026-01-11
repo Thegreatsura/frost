@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 type Status =
   | "pending"
   | "cloning"
+  | "pulling"
   | "building"
   | "deploying"
   | "running"
@@ -11,6 +12,7 @@ type Status =
 const statusConfig: Record<Status, { color: string; pulse: boolean }> = {
   pending: { color: "bg-neutral-500", pulse: false },
   cloning: { color: "bg-blue-500", pulse: true },
+  pulling: { color: "bg-blue-500", pulse: true },
   building: { color: "bg-yellow-500", pulse: true },
   deploying: { color: "bg-purple-500", pulse: true },
   running: { color: "bg-green-500", pulse: false },

@@ -113,25 +113,11 @@ export default function ServiceOverviewPage() {
   return (
     <div className="space-y-6">
       {currentDeployment && (
-        <Card className="border-l-2 border-l-green-500 bg-neutral-900 border-neutral-800">
+        <Card className="bg-neutral-900 border-neutral-800">
           <CardContent className="py-4">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <StatusDot status="running" />
-                {systemDomain ? (
-                  <a
-                    href={`https://${systemDomain.domain}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-mono text-sm text-blue-400 hover:text-blue-300"
-                  >
-                    {systemDomain.domain}
-                  </a>
-                ) : (
-                  <span className="text-sm text-neutral-300">
-                    Running on port {currentDeployment.hostPort}
-                  </span>
-                )}
+              <div className="flex items-center gap-2">
+                <StatusDot status={currentDeployment.status} showLabel />
               </div>
               {service.serviceType !== "database" && (
                 <a
@@ -149,6 +135,22 @@ export default function ServiceOverviewPage() {
                 </a>
               )}
             </div>
+            {service.serviceType !== "database" && (
+              <a
+                href={
+                  systemDomain
+                    ? `https://${systemDomain.domain}`
+                    : `http://${serverIp || "localhost"}:${currentDeployment.hostPort}`
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1 block font-mono text-sm text-blue-400 hover:text-blue-300"
+              >
+                {systemDomain
+                  ? systemDomain.domain
+                  : `${serverIp || "localhost"}:${currentDeployment.hostPort}`}
+              </a>
+            )}
             <div className="mt-3 border-t border-neutral-800 pt-3">
               <p className="text-xs text-neutral-500 mb-2">
                 {service.deployType === "repo" ? "Source" : "Image"}
