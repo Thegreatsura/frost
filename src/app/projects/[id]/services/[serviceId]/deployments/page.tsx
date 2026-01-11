@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation } from "@tanstack/react-query";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -14,6 +15,7 @@ import { DeploymentRow } from "../_components/deployment-row";
 
 export default function ServiceDeploymentsPage() {
   const params = useParams();
+  const projectId = params.id as string;
   const serviceId = params.serviceId as string;
 
   const { data: service } = useService(serviceId);
@@ -138,6 +140,15 @@ export default function ServiceDeploymentsPage() {
               <pre className="max-h-96 overflow-auto rounded bg-neutral-950 p-4 font-mono text-xs text-neutral-400">
                 {selectedDeployment.buildLog || "No logs yet..."}
               </pre>
+              <p className="mt-3 text-xs text-neutral-500">
+                Looking for container output?{" "}
+                <Link
+                  href={`/projects/${projectId}/services/${serviceId}/logs`}
+                  className="text-neutral-400 underline hover:text-neutral-300"
+                >
+                  View runtime logs
+                </Link>
+              </p>
             </CardContent>
           </Card>
         )}
