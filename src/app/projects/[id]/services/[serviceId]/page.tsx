@@ -1,7 +1,15 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Database, ExternalLink, Globe } from "lucide-react";
+import {
+  Copy,
+  Database,
+  ExternalLink,
+  GitBranch,
+  GitCommitHorizontal,
+  Globe,
+  Package,
+} from "lucide-react";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -15,6 +23,7 @@ import type { Deployment, Domain, EnvVar } from "@/lib/api";
 import { api } from "@/lib/api";
 import { buildConnectionString } from "@/lib/db-templates";
 import { buildSslipDomain } from "@/lib/sslip";
+import { getTimeAgo } from "@/lib/time";
 import { ServiceMetricsCard } from "./_components/service-metrics-card";
 
 export default function ServiceOverviewPage() {
@@ -140,9 +149,40 @@ export default function ServiceOverviewPage() {
                 </a>
               )}
             </div>
-            <p className="mt-1 font-mono text-xs text-neutral-500">
-              {currentDeployment.commitSha}
-            </p>
+            <div className="mt-3 border-t border-neutral-800 pt-3">
+              <p className="text-xs text-neutral-500 mb-2">
+                {service.deployType === "repo" ? "Source" : "Image"}
+              </p>
+              {service.deployType === "repo" ? (
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-sm text-neutral-300">
+                    <GitBranch className="h-3.5 w-3.5 text-neutral-500" />
+                    <span className="font-mono">
+                      {service.branch || "main"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-neutral-400">
+                    <GitCommitHorizontal className="h-3.5 w-3.5 text-neutral-500" />
+                    <span className="font-mono">
+                      {currentDeployment.commitSha}
+                    </span>
+                    {currentDeployment.commitMessage && (
+                      <span className="text-neutral-500 truncate max-w-xs">
+                        {currentDeployment.commitMessage}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-sm text-neutral-300">
+                  <Package className="h-3.5 w-3.5 text-neutral-500" />
+                  <span className="font-mono">{service.imageUrl}</span>
+                </div>
+              )}
+              <p className="mt-2 text-xs text-neutral-500">
+                Deployed {getTimeAgo(new Date(currentDeployment.createdAt))}
+              </p>
+            </div>
           </CardContent>
         </Card>
       )}
