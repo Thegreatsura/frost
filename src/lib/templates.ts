@@ -35,4 +35,11 @@ export const SERVICE_TEMPLATES: ServiceTemplate[] = [
     description: "Simple hello world",
     containerPort: 8000,
   },
+  {
+    id: "echo-server",
+    name: "Echo Server",
+    image: "ealen/echo-server",
+    description: "Logs all requests to stdout (JSON)",
+    containerPort: 80,
+  },
 ];
