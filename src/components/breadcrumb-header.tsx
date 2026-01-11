@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { FrostLogo } from "./frost-logo";
 import { SettingsLink } from "./settings-link";
 
@@ -9,9 +10,10 @@ interface BreadcrumbItem {
 
 interface BreadcrumbHeaderProps {
   items: BreadcrumbItem[];
+  actions?: ReactNode;
 }
 
-export function BreadcrumbHeader({ items }: BreadcrumbHeaderProps) {
+export function BreadcrumbHeader({ items, actions }: BreadcrumbHeaderProps) {
   return (
     <header className="border-b border-neutral-800">
       <div className="container mx-auto flex h-14 items-center gap-2 px-4">
@@ -39,7 +41,8 @@ export function BreadcrumbHeader({ items }: BreadcrumbHeaderProps) {
             )}
           </div>
         ))}
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          {actions}
           <SettingsLink />
         </div>
       </div>
