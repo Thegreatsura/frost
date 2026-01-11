@@ -4,12 +4,10 @@ import { Plus } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useProject } from "@/hooks/use-projects";
-import { useDeleteService } from "@/hooks/use-services";
 import { api } from "@/lib/api";
 import { ServiceCard } from "./_components/service-card";
 
@@ -18,22 +16,28 @@ export default function ProjectServicesPage() {
   const projectId = params.id as string;
 
   const { data: project } = useProject(projectId);
-  const deleteServiceMutation = useDeleteService(projectId);
   const [serverIp, setServerIp] = useState<string | null>(null);
+  const [domains, setDomains] = useState<Record<string, string>>({});
 
   useEffect(() => {
     api.settings.get().then((s) => setServerIp(s.serverIp));
   }, []);
 
-  async function handleDeleteService(serviceId: string) {
-    if (!confirm("Delete this service?")) return;
-    try {
-      await deleteServiceMutation.mutateAsync(serviceId);
-      toast.success("Service deleted");
-    } catch {
-      toast.error("Failed to delete service");
+  useEffect(() => {
+    if (!project?.services) return;
+    async function fetchDomains() {
+      const domainMap: Record<string, string> = {};
+      for (const service of project!.services || []) {
+        const serviceDomains = await api.domains.list(service.id);
+        const systemDomain = serviceDomains.find((d) => d.isSystem === 1);
+        if (systemDomain) {
+          domainMap[service.id] = systemDomain.domain;
+        }
+      }
+      setDomains(domainMap);
     }
-  }
+    fetchDomains();
+  }, [project]);
 
   if (!project) return null;
 
@@ -68,8 +72,8 @@ export default function ProjectServicesPage() {
           key={service.id}
           service={service}
           projectId={projectId}
+          domain={domains[service.id] || null}
           serverIp={serverIp}
-          onDelete={() => handleDeleteService(service.id)}
         />
       ))}
     </div>

@@ -6,7 +6,7 @@ import {
   Database,
   ExternalLink,
   GitBranch,
-  GitCommitHorizontal,
+  Github,
   Globe,
   Package,
 } from "lucide-react";
@@ -25,6 +25,56 @@ import { buildConnectionString } from "@/lib/db-templates";
 import { buildSslipDomain } from "@/lib/sslip";
 import { getTimeAgo } from "@/lib/time";
 import { ServiceMetricsCard } from "./_components/service-metrics-card";
+
+function getGitHubRepoFromUrl(url: string | null): string | null {
+  if (!url) return null;
+  const match = url.match(/github\.com\/([^/]+\/[^/]+)/);
+  return match ? match[1] : null;
+}
+
+function getKnownServiceLogo(
+  imageUrl: string | null,
+  name: string,
+): string | null {
+  const img = imageUrl?.toLowerCase() || "";
+  const n = name.toLowerCase();
+
+  if (img.includes("postgres") || n.includes("postgres") || n.includes("pg")) {
+    return "https://www.postgresql.org/media/img/about/press/elephant.png";
+  }
+  if (img.includes("redis") || n.includes("redis")) {
+    return "https://cdn.simpleicons.org/redis/DC382D";
+  }
+  if (img.includes("mysql") || n.includes("mysql")) {
+    return "https://cdn.simpleicons.org/mysql/4479A1";
+  }
+  if (img.includes("mongo") || n.includes("mongo")) {
+    return "https://cdn.simpleicons.org/mongodb/47A248";
+  }
+  if (img.includes("mariadb") || n.includes("mariadb")) {
+    return "https://cdn.simpleicons.org/mariadb/003545";
+  }
+  if (img.includes("nginx") || n.includes("nginx")) {
+    return "https://cdn.simpleicons.org/nginx/009639";
+  }
+  if (img.includes("node") || n.includes("node")) {
+    return "https://cdn.simpleicons.org/nodedotjs/339933";
+  }
+  if (img.includes("python") || n.includes("python")) {
+    return "https://cdn.simpleicons.org/python/3776AB";
+  }
+  if (img.includes("rabbitmq") || n.includes("rabbitmq")) {
+    return "https://cdn.simpleicons.org/rabbitmq/FF6600";
+  }
+  if (img.includes("elasticsearch") || n.includes("elastic")) {
+    return "https://cdn.simpleicons.org/elasticsearch/005571";
+  }
+  if (img.includes("minio") || n.includes("minio")) {
+    return "https://cdn.simpleicons.org/minio/C72E49";
+  }
+
+  return null;
+}
 
 export default function ServiceOverviewPage() {
   const params = useParams();
@@ -114,76 +164,110 @@ export default function ServiceOverviewPage() {
     <div className="space-y-6">
       {currentDeployment && (
         <Card className="bg-neutral-900 border-neutral-800">
-          <CardContent className="py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <StatusDot status={currentDeployment.status} showLabel />
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3 mb-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-neutral-800 text-neutral-400">
+                {getKnownServiceLogo(service.imageUrl, service.name) ? (
+                  <img
+                    src={getKnownServiceLogo(service.imageUrl, service.name)!}
+                    alt=""
+                    className="h-6 w-6 object-contain"
+                  />
+                ) : (
+                  <span className="text-base font-semibold text-neutral-300">
+                    {service.name.charAt(0).toUpperCase()}
+                  </span>
+                )}
               </div>
-              {service.serviceType !== "database" && (
-                <a
-                  href={
-                    systemDomain
-                      ? `https://${systemDomain.domain}`
-                      : `http://${serverIp || "localhost"}:${currentDeployment.hostPort}`
-                  }
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300"
-                >
-                  Open
-                  <ExternalLink className="h-3.5 w-3.5" />
-                </a>
-              )}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between">
+                  <StatusDot status={currentDeployment.status} showLabel />
+                  {service.serviceType !== "database" && (
+                    <a
+                      href={
+                        systemDomain
+                          ? `https://${systemDomain.domain}`
+                          : `http://${serverIp || "localhost"}:${currentDeployment.hostPort}`
+                      }
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300"
+                    >
+                      Open
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  )}
+                </div>
+                {service.serviceType !== "database" && (
+                  <a
+                    href={
+                      systemDomain
+                        ? `https://${systemDomain.domain}`
+                        : `http://${serverIp || "localhost"}:${currentDeployment.hostPort}`
+                    }
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block font-mono text-sm text-blue-400 hover:text-blue-300 truncate"
+                  >
+                    {systemDomain
+                      ? systemDomain.domain
+                      : `${serverIp || "localhost"}:${currentDeployment.hostPort}`}
+                  </a>
+                )}
+              </div>
             </div>
-            {service.serviceType !== "database" && (
-              <a
-                href={
-                  systemDomain
-                    ? `https://${systemDomain.domain}`
-                    : `http://${serverIp || "localhost"}:${currentDeployment.hostPort}`
-                }
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-1 block font-mono text-sm text-blue-400 hover:text-blue-300"
-              >
-                {systemDomain
-                  ? systemDomain.domain
-                  : `${serverIp || "localhost"}:${currentDeployment.hostPort}`}
-              </a>
-            )}
-            <div className="mt-3 border-t border-neutral-800 pt-3">
-              <p className="text-xs text-neutral-500 mb-2">
-                {service.deployType === "repo" ? "Source" : "Image"}
-              </p>
-              {service.deployType === "repo" ? (
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-sm text-neutral-300">
-                    <GitBranch className="h-3.5 w-3.5 text-neutral-500" />
-                    <span className="font-mono">
-                      {service.branch || "main"}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-neutral-400">
-                    <GitCommitHorizontal className="h-3.5 w-3.5 text-neutral-500" />
-                    <span className="font-mono">
-                      {currentDeployment.commitSha}
-                    </span>
-                    {currentDeployment.commitMessage && (
-                      <span className="text-neutral-500 truncate max-w-xs">
-                        {currentDeployment.commitMessage}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 text-sm text-neutral-300">
-                  <Package className="h-3.5 w-3.5 text-neutral-500" />
-                  <span className="font-mono">{service.imageUrl}</span>
-                </div>
+
+            {service.deployType === "repo" &&
+              getGitHubRepoFromUrl(service.repoUrl) && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-800 px-2.5 py-1 text-xs text-neutral-400 mb-2">
+                  <Github className="h-3.5 w-3.5" />
+                  {getGitHubRepoFromUrl(service.repoUrl)}
+                </span>
               )}
-              <p className="mt-2 text-xs text-neutral-500">
+
+            {service.deployType === "image" && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-800 px-2.5 py-1 text-xs text-neutral-400 mb-2">
+                <Package className="h-3.5 w-3.5" />
+                {service.imageUrl}
+              </span>
+            )}
+
+            {service.deployType === "repo" && currentDeployment.commitSha && (
+              <div className="mb-2">
+                {getGitHubRepoFromUrl(service.repoUrl) ? (
+                  <a
+                    href={`https://github.com/${getGitHubRepoFromUrl(service.repoUrl)}/commit/${currentDeployment.commitSha}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 font-mono text-xs text-neutral-500 hover:text-neutral-300"
+                  >
+                    {currentDeployment.commitSha}
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                ) : (
+                  <span className="font-mono text-xs text-neutral-500">
+                    {currentDeployment.commitSha}
+                  </span>
+                )}
+                {currentDeployment.commitMessage && (
+                  <p className="mt-1 text-sm text-neutral-400">
+                    {currentDeployment.commitMessage}
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center gap-1.5 text-xs text-neutral-500">
+              <span>
                 Deployed {getTimeAgo(new Date(currentDeployment.createdAt))}
-              </p>
+              </span>
+              {service.deployType === "repo" && (
+                <>
+                  <span>on</span>
+                  <GitBranch className="h-3 w-3" />
+                  <span>{service.branch || "main"}</span>
+                </>
+              )}
             </div>
           </CardContent>
         </Card>

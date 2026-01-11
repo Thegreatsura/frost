@@ -1,148 +1,150 @@
 "use client";
 
-import { ExternalLink, Loader2, Rocket, Trash2 } from "lucide-react";
+import { GitBranch, Github, Package } from "lucide-react";
 import Link from "next/link";
-import { toast } from "sonner";
 import { StatusDot } from "@/components/status-dot";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useDeployService } from "@/hooks/use-services";
+import { Card, CardContent } from "@/components/ui/card";
 import type { Service } from "@/lib/api";
-import { cn } from "@/lib/utils";
+import { getTimeAgo } from "@/lib/time";
 
-function getGitHubOwnerFromUrl(url: string | null): string | null {
+function getGitHubRepoFromUrl(url: string | null): string | null {
   if (!url) return null;
-  const match = url.match(/github\.com\/([^/]+)/);
+  const match = url.match(/github\.com\/([^/]+\/[^/]+)/);
   return match ? match[1] : null;
+}
+
+function getKnownServiceLogo(service: Service): string | null {
+  const imageUrl = service.imageUrl?.toLowerCase() || "";
+  const name = service.name.toLowerCase();
+
+  if (
+    imageUrl.includes("postgres") ||
+    name.includes("postgres") ||
+    name.includes("pg")
+  ) {
+    return "https://www.postgresql.org/media/img/about/press/elephant.png";
+  }
+  if (imageUrl.includes("redis") || name.includes("redis")) {
+    return "https://cdn.simpleicons.org/redis/DC382D";
+  }
+  if (imageUrl.includes("mysql") || name.includes("mysql")) {
+    return "https://cdn.simpleicons.org/mysql/4479A1";
+  }
+  if (imageUrl.includes("mongo") || name.includes("mongo")) {
+    return "https://cdn.simpleicons.org/mongodb/47A248";
+  }
+  if (imageUrl.includes("mariadb") || name.includes("mariadb")) {
+    return "https://cdn.simpleicons.org/mariadb/003545";
+  }
+  if (imageUrl.includes("nginx") || name.includes("nginx")) {
+    return "https://cdn.simpleicons.org/nginx/009639";
+  }
+  if (imageUrl.includes("node") || name.includes("node")) {
+    return "https://cdn.simpleicons.org/nodedotjs/339933";
+  }
+  if (imageUrl.includes("python") || name.includes("python")) {
+    return "https://cdn.simpleicons.org/python/3776AB";
+  }
+  if (imageUrl.includes("rabbitmq") || name.includes("rabbitmq")) {
+    return "https://cdn.simpleicons.org/rabbitmq/FF6600";
+  }
+  if (imageUrl.includes("elasticsearch") || name.includes("elastic")) {
+    return "https://cdn.simpleicons.org/elasticsearch/005571";
+  }
+  if (imageUrl.includes("minio") || name.includes("minio")) {
+    return "https://cdn.simpleicons.org/minio/C72E49";
+  }
+
+  return null;
 }
 
 interface ServiceCardProps {
   service: Service;
   projectId: string;
+  domain: string | null;
   serverIp: string | null;
-  onDelete: () => void;
 }
 
 export function ServiceCard({
   service,
   projectId,
+  domain,
   serverIp,
-  onDelete,
 }: ServiceCardProps) {
-  const deployMutation = useDeployService(service.id, projectId);
-
-  async function handleDeploy(e: React.MouseEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    try {
-      await deployMutation.mutateAsync();
-      toast.success(`Deploying ${service.name}`);
-    } catch {
-      toast.error("Failed to start deployment");
-    }
-  }
-
-  function handleDelete(e: React.MouseEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    onDelete();
-  }
-
   const deployment = service.latestDeployment;
-  const isRunning = deployment?.status === "running";
-
-  function getDisplayStatus(): string {
-    if (!deployment) return "pending";
-    if (deployment.status === "running") return "running";
-    if (deployment.imageName) return "running";
-    if (deployment.status === "failed") return "failed";
-    return "building";
-  }
-  const status = getDisplayStatus();
+  const url =
+    domain ||
+    (serverIp && deployment?.hostPort
+      ? `${serverIp}:${deployment.hostPort}`
+      : null);
+  const githubRepo = getGitHubRepoFromUrl(service.repoUrl);
+  const knownLogo = getKnownServiceLogo(service);
 
   return (
-    <Link href={`/projects/${projectId}/services/${service.id}`}>
-      <Card
-        className={cn(
-          "cursor-pointer bg-neutral-900 border-neutral-800 transition-colors hover:border-neutral-700",
-          isRunning && "border-l-2 border-l-green-500 hover:border-l-green-500",
-        )}
-      >
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center justify-between text-sm font-medium text-neutral-300">
-            <div className="flex items-center gap-2">
-              <StatusDot status={status} />
-              <span>{service.name}</span>
-            </div>
-            <div className="flex gap-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={handleDeploy}
-                disabled={deployMutation.isPending}
-              >
-                {deployMutation.isPending ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Rocket className="h-3.5 w-3.5" />
-                )}
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={handleDelete}
-              >
-                <Trash2 className="h-3.5 w-3.5 text-neutral-500" />
-              </Button>
-            </div>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <div className="flex items-center gap-2">
-            {service.deployType === "repo" &&
-              service.repoUrl &&
-              getGitHubOwnerFromUrl(service.repoUrl) && (
+    <Link
+      href={`/projects/${projectId}/services/${service.id}`}
+      className="h-full"
+    >
+      <Card className="h-full cursor-pointer bg-neutral-900 border-neutral-800 transition-colors hover:border-neutral-700">
+        <CardContent className="flex h-full flex-col p-4">
+          <div className="flex items-start gap-3 mb-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-neutral-800 text-neutral-400">
+              {knownLogo ? (
                 <img
-                  src={`https://github.com/${getGitHubOwnerFromUrl(service.repoUrl)}.png?size=40`}
+                  src={knownLogo}
                   alt=""
-                  className="h-5 w-5 rounded-full"
+                  className="h-5 w-5 object-contain"
                 />
-              )}
-            <p className="truncate font-mono text-xs text-neutral-500">
-              {service.deployType === "image"
-                ? service.imageUrl
-                : service.repoUrl?.replace("https://github.com/", "")}
-            </p>
-          </div>
-          {isRunning && deployment?.hostPort && (
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-neutral-500">
-                Port {deployment.hostPort}
-              </span>
-              {service.serviceType !== "database" && (
-                <button
-                  type="button"
-                  className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    window.open(
-                      `http://${serverIp || "localhost"}:${deployment.hostPort}`,
-                      "_blank",
-                      "noopener,noreferrer",
-                    );
-                  }}
-                >
-                  Open
-                  <ExternalLink className="h-3 w-3" />
-                </button>
+              ) : (
+                <span className="text-sm font-semibold text-neutral-300">
+                  {service.name.charAt(0).toUpperCase()}
+                </span>
               )}
             </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <p className="font-medium text-neutral-200">{service.name}</p>
+                <StatusDot status={deployment?.status || "pending"} />
+              </div>
+              {url && service.serviceType !== "database" && (
+                <p className="text-xs text-neutral-500 truncate">{url}</p>
+              )}
+            </div>
+          </div>
+
+          {service.deployType === "repo" && githubRepo && (
+            <span className="inline-flex items-center gap-1.5 self-start rounded-full bg-neutral-800 px-2 py-0.5 text-xs text-neutral-400 mb-2">
+              <Github className="h-3 w-3" />
+              {githubRepo}
+            </span>
           )}
-          {deployment && !isRunning && (
-            <p className="text-xs text-neutral-500">{deployment.commitSha}</p>
+
+          {service.deployType === "image" && (
+            <span className="inline-flex items-center gap-1.5 self-start rounded-full bg-neutral-800 px-2 py-0.5 text-xs text-neutral-400 mb-2">
+              <Package className="h-3 w-3" />
+              {service.imageUrl}
+            </span>
+          )}
+
+          {deployment?.commitMessage && (
+            <p className="text-sm text-neutral-400 line-clamp-1 mb-2">
+              {deployment.commitMessage}
+            </p>
+          )}
+
+          <div className="flex-grow" />
+
+          {deployment && (
+            <div className="flex items-center gap-1 text-xs text-neutral-500">
+              <span>{getTimeAgo(new Date(deployment.createdAt))}</span>
+              {service.deployType === "repo" && (
+                <>
+                  <span>on</span>
+                  <GitBranch className="h-3 w-3" />
+                  <span>{service.branch || "main"}</span>
+                </>
+              )}
+            </div>
           )}
         </CardContent>
       </Card>
