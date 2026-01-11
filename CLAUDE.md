@@ -139,3 +139,8 @@ Keep messages short (<50 chars title). Body optional for context.
 gh workflow run release.yml -f version=patch  # or minor, major
 ```
 **Never create releases manually** - always use the workflow above.
+
+**Choosing version bump** - check commits since last release with `git log --oneline`:
+- `patch`: bug fixes only (`fix:` commits)
+- `minor`: new features, backward compatible (`feat:` commits)
+- `major`: breaking changes (rare, requires explicit mention in commits)
