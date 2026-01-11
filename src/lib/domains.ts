@@ -38,13 +38,17 @@ export async function addDomain(serviceId: string, input: DomainInput) {
       type,
       redirectTarget: type === "redirect" ? redirectTarget : null,
       redirectCode: type === "redirect" ? redirectCode : null,
-      dnsVerified: 0,
+      dnsVerified: false,
       sslStatus: "pending",
       createdAt: now,
     })
     .execute();
 
-  return getDomain(id);
+  const result = await getDomain(id);
+  if (!result) {
+    throw new Error("Failed to create domain");
+  }
+  return result;
 }
 
 export async function getDomain(id: string) {
@@ -93,11 +97,19 @@ export async function updateDomain(
     setValues.dnsVerified = updates.dnsVerified ? 1 : 0;
   if (updates.sslStatus !== undefined) setValues.sslStatus = updates.sslStatus;
 
-  if (Object.keys(setValues).length === 0) return getDomain(id);
+  if (Object.keys(setValues).length > 0) {
+    await db
+      .updateTable("domains")
+      .set(setValues)
+      .where("id", "=", id)
+      .execute();
+  }
 
-  await db.updateTable("domains").set(setValues).where("id", "=", id).execute();
-
-  return getDomain(id);
+  const result = await getDomain(id);
+  if (!result) {
+    throw new Error("Domain not found after update");
+  }
+  return result;
 }
 
 export async function removeDomain(id: string) {
@@ -109,7 +121,7 @@ export async function getSystemDomainForService(serviceId: string) {
     .selectFrom("domains")
     .selectAll()
     .where("serviceId", "=", serviceId)
-    .where("isSystem", "=", 1)
+    .where("isSystem", "=", true)
     .executeTakeFirst();
   return domain ?? null;
 }
@@ -162,10 +174,10 @@ export async function createSystemDomain(
       type: "proxy",
       redirectTarget: null,
       redirectCode: null,
-      dnsVerified: 1,
+      dnsVerified: true,
       sslStatus: "pending",
       createdAt: now,
-      isSystem: 1,
+      isSystem: true,
     })
     .execute();
 
@@ -382,7 +394,7 @@ export async function syncCaddyConfig(): Promise<boolean> {
       "domains.redirectCode",
       "deployments.hostPort",
     ])
-    .where("domains.dnsVerified", "=", 1)
+    .where("domains.dnsVerified", "=", true)
     .execute();
 
   const routes: DomainRoute[] = [];
