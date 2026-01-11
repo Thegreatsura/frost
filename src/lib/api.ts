@@ -113,12 +113,12 @@ export interface Settings {
 
 export interface CreateProjectInput {
   name: string;
-  env_vars?: EnvVar[];
+  envVars?: EnvVar[];
 }
 
 export interface UpdateProjectInput {
   name?: string;
-  env_vars?: EnvVar[];
+  envVars?: EnvVar[];
 }
 
 export interface CreateServiceInput {
@@ -195,14 +195,15 @@ export interface MetricsHistory {
 
 export interface UpdateServiceInput {
   name?: string;
-  env_vars?: EnvVar[];
+  envVars?: EnvVar[];
   branch?: string;
-  dockerfile_path?: string;
-  repo_url?: string;
-  image_url?: string;
-  container_port?: number;
-  health_check_path?: string | null;
-  health_check_timeout?: number;
+  dockerfilePath?: string;
+  repoUrl?: string;
+  imageUrl?: string;
+  containerPort?: number;
+  healthCheckPath?: string | null;
+  healthCheckTimeout?: number;
+  autoDeployEnabled?: boolean;
 }
 
 async function handleResponse<T>(res: Response): Promise<T> {
@@ -240,9 +241,9 @@ export const api = {
         handleResponse<{ success: boolean }>(r),
       ),
 
-    deploy: (id: string): Promise<{ deployment_ids: string[] }> =>
+    deploy: (id: string): Promise<{ deploymentIds: string[] }> =>
       fetch(`/api/projects/${id}/deploy`, { method: "POST" }).then((r) =>
-        handleResponse<{ deployment_ids: string[] }>(r),
+        handleResponse<{ deploymentIds: string[] }>(r),
       ),
   },
 
@@ -274,9 +275,9 @@ export const api = {
         handleResponse<{ success: boolean }>(r),
       ),
 
-    deploy: (id: string): Promise<{ deployment_id: string }> =>
+    deploy: (id: string): Promise<{ deploymentId: string }> =>
       fetch(`/api/services/${id}/deploy`, { method: "POST" }).then((r) =>
-        handleResponse<{ deployment_id: string }>(r),
+        handleResponse<{ deploymentId: string }>(r),
       ),
   },
 
@@ -291,9 +292,9 @@ export const api = {
         handleResponse<Deployment[]>(r),
       ),
 
-    rollback: (id: string): Promise<{ deployment_id: string }> =>
+    rollback: (id: string): Promise<{ deploymentId: string }> =>
       fetch(`/api/deployments/${id}/rollback`, { method: "POST" }).then((r) =>
-        handleResponse<{ deployment_id: string }>(r),
+        handleResponse<{ deploymentId: string }>(r),
       ),
   },
 

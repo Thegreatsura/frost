@@ -53,7 +53,7 @@ export async function POST(
   try {
     const newDeploymentId = await rollbackDeployment(id);
     return NextResponse.json(
-      { deployment_id: newDeploymentId },
+      { deploymentId: newDeploymentId },
       { status: 202 },
     );
   } catch (err: unknown) {

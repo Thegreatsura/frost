@@ -26,7 +26,7 @@ export default function NewProjectPage() {
 
     const data: CreateProjectInput = {
       name: formData.get("name") as string,
-      env_vars: validEnvVars,
+      envVars: validEnvVars,
     };
 
     try {

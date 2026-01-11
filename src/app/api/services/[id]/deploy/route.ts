@@ -20,7 +20,7 @@ export async function POST(
 
   try {
     const deploymentId = await deployService(id);
-    return NextResponse.json({ deployment_id: deploymentId }, { status: 202 });
+    return NextResponse.json({ deploymentId }, { status: 202 });
   } catch (error) {
     console.error(`Deploy failed for service ${id}:`, error);
     return NextResponse.json(

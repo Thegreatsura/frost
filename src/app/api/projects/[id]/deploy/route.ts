@@ -20,5 +20,5 @@ export async function POST(
 
   const deploymentIds = await deployProject(id);
 
-  return NextResponse.json({ deployment_ids: deploymentIds }, { status: 202 });
+  return NextResponse.json({ deploymentIds }, { status: 202 });
 }
