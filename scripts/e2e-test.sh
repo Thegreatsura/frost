@@ -177,7 +177,7 @@ wait_for_deployment "$DEPLOY_FRONTEND_ID"
 
 echo ""
 echo "=== Test 9: Verify inter-service communication ==="
-NETWORK_NAME="frost-net-$(echo $PROJECT2_ID | tr '[:upper:]' '[:lower:]')"
+NETWORK_NAME=$(echo "frost-net-$PROJECT2_ID" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9.-]/-/g' | sed 's/-\+/-/g' | sed 's/^-\|-$//g')
 CURL_RESULT=$(remote "docker run --rm --network $NETWORK_NAME curlimages/curl -sf http://backend:80")
 if echo "$CURL_RESULT" | grep -q "nginx"; then
   echo "Inter-service communication works!"
@@ -215,8 +215,8 @@ sleep 2
 DEPLOY3_ID=$(api "$BASE_URL/api/services/$SERVICE3_ID/deployments" | jq -r '.[0].id')
 wait_for_deployment "$DEPLOY3_ID"
 
-CONTAINER_NAME="frost-${PROJECT3_ID}-envcheck"
-CONTAINER_NAME=$(echo "$CONTAINER_NAME" | tr '[:upper:]' '[:lower:]')
+CONTAINER_NAME="frost-${SERVICE3_ID}-${DEPLOY3_ID}"
+CONTAINER_NAME=$(echo "$CONTAINER_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9.-]/-/g' | sed 's/-\+/-/g' | sed 's/^-\|-$//g')
 SHARED_VAL=$(remote "docker exec $CONTAINER_NAME printenv SHARED")
 PROJECT_ONLY_VAL=$(remote "docker exec $CONTAINER_NAME printenv PROJECT_ONLY")
 SERVICE_ONLY_VAL=$(remote "docker exec $CONTAINER_NAME printenv SERVICE_ONLY")
@@ -856,6 +856,72 @@ fi
 echo ""
 echo "=== Test 50: Cleanup health check test project ==="
 api -X DELETE "$BASE_URL/api/projects/$PROJECT10_ID" > /dev/null
+echo "Deleted project"
+
+echo ""
+echo "########################################"
+echo "# Test Group 10: Deployment Race Conditions"
+echo "########################################"
+
+echo ""
+echo "=== Test 51: Create service for race test ==="
+PROJECT11=$(api -X POST "$BASE_URL/api/projects" -d '{"name":"e2e-race"}')
+PROJECT11_ID=$(echo "$PROJECT11" | jq -r '.id')
+echo "Created project: $PROJECT11_ID"
+
+SERVICE11=$(api -X POST "$BASE_URL/api/projects/$PROJECT11_ID/services" \
+  -d '{"name":"race-test","deployType":"image","imageUrl":"nginx:alpine","containerPort":80}')
+SERVICE11_ID=$(echo "$SERVICE11" | jq -r '.id')
+echo "Created service: $SERVICE11_ID"
+
+sleep 2
+DEPLOY11_INITIAL=$(api "$BASE_URL/api/services/$SERVICE11_ID/deployments" | jq -r '.[0].id')
+echo "Waiting for initial auto-deployment: $DEPLOY11_INITIAL"
+wait_for_deployment "$DEPLOY11_INITIAL"
+
+echo ""
+echo "=== Test 52: Rapid double-deploy cancels first ==="
+DEPLOY11A=$(api -X POST "$BASE_URL/api/services/$SERVICE11_ID/deploy")
+DEPLOY11A_ID=$(echo "$DEPLOY11A" | jq -r '.deploymentId')
+echo "First deploy: $DEPLOY11A_ID"
+
+DEPLOY11B=$(api -X POST "$BASE_URL/api/services/$SERVICE11_ID/deploy")
+DEPLOY11B_ID=$(echo "$DEPLOY11B" | jq -r '.deploymentId')
+echo "Second deploy: $DEPLOY11B_ID"
+
+wait_for_deployment "$DEPLOY11B_ID"
+
+STATUS11A=$(api "$BASE_URL/api/deployments/$DEPLOY11A_ID" | jq -r '.status')
+if [ "$STATUS11A" != "cancelled" ]; then
+  echo "FAIL: First deployment should be cancelled, got: $STATUS11A"
+  exit 1
+fi
+echo "First deployment correctly cancelled"
+
+echo ""
+echo "=== Test 53: Verify only one container running ==="
+CONTAINER_COUNT=$(remote "docker ps --filter 'label=frost.service.id=$SERVICE11_ID' --format '{{.Names}}' | wc -l")
+CONTAINER_COUNT=$(echo "$CONTAINER_COUNT" | tr -d ' ')
+if [ "$CONTAINER_COUNT" != "1" ]; then
+  echo "FAIL: Expected 1 container, found: $CONTAINER_COUNT"
+  exit 1
+fi
+echo "Exactly 1 container running"
+
+echo ""
+echo "=== Test 54: Verify container name format ==="
+CONTAINER_NAME=$(remote "docker ps --filter 'label=frost.service.id=$SERVICE11_ID' --format '{{.Names}}'")
+SERVICE11_ID_SANITIZED=$(echo "$SERVICE11_ID" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9.-]/-/g' | sed 's/-\+/-/g' | sed 's/^-\|-$//g')
+EXPECTED_PREFIX="frost-${SERVICE11_ID_SANITIZED}-"
+if [[ "$CONTAINER_NAME" != $EXPECTED_PREFIX* ]]; then
+  echo "FAIL: Container name should start with $EXPECTED_PREFIX, got: $CONTAINER_NAME"
+  exit 1
+fi
+echo "Container name format correct: $CONTAINER_NAME"
+
+echo ""
+echo "=== Test 55: Cleanup race test project ==="
+api -X DELETE "$BASE_URL/api/projects/$PROJECT11_ID" > /dev/null
 echo "Deleted project"
 
 echo ""

@@ -45,7 +45,8 @@ export type DeploymentStatus =
   | "building"
   | "deploying"
   | "running"
-  | "failed";
+  | "failed"
+  | "cancelled";
 
 async function updateDeployment(
   id: string,
@@ -74,6 +75,23 @@ async function appendLog(id: string, log: string) {
 
   const existingLog = deployment?.buildLog || "";
   await updateDeployment(id, { buildLog: existingLog + log });
+}
+
+async function isDeploymentCancelled(deploymentId: string): Promise<boolean> {
+  const deployment = await db
+    .selectFrom("deployments")
+    .select("status")
+    .where("id", "=", deploymentId)
+    .executeTakeFirst();
+  return deployment?.status === "cancelled";
+}
+
+function sanitizeDockerName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9.-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
 function parseEnvVars(envVarsJson: string): Record<string, string> {
@@ -155,6 +173,31 @@ export async function deployService(
     throw new Error("Project not found");
   }
 
+  const inProgressStatuses = [
+    "pending",
+    "cloning",
+    "pulling",
+    "building",
+    "deploying",
+  ];
+  const activeDeployments = await db
+    .selectFrom("deployments")
+    .select(["id", "containerId"])
+    .where("serviceId", "=", serviceId)
+    .where("status", "in", inProgressStatuses)
+    .execute();
+
+  for (const dep of activeDeployments) {
+    if (dep.containerId) {
+      await stopContainer(dep.containerId);
+    }
+    await db
+      .updateTable("deployments")
+      .set({ status: "cancelled", finishedAt: Date.now() })
+      .where("id", "=", dep.id)
+      .execute();
+  }
+
   const deploymentId = nanoid();
   const now = Date.now();
 
@@ -185,8 +228,10 @@ async function runServiceDeployment(
   options?: DeployOptions,
 ) {
   let currentCommitSha = options?.commitSha || "HEAD";
-  const containerName = `frost-${project.id}-${service.name}`.toLowerCase();
-  const networkName = `frost-net-${project.id}`.toLowerCase();
+  const containerName = sanitizeDockerName(
+    `frost-${service.id}-${deploymentId}`,
+  );
+  const networkName = sanitizeDockerName(`frost-net-${project.id}`);
 
   const baseLabels = {
     "frost.managed": "true",
@@ -221,6 +266,10 @@ async function runServiceDeployment(
 
       if (!pullResult.success) {
         throw new Error(pullResult.error || "Pull failed");
+      }
+
+      if (await isDeploymentCancelled(deploymentId)) {
+        return;
       }
 
       await db
@@ -305,8 +354,7 @@ async function runServiceDeployment(
         deploymentId,
       );
 
-      imageName =
-        `frost-${project.id}-${service.name}:${commitSha}`.toLowerCase();
+      imageName = `${sanitizeDockerName(`frost-${project.id}-${service.name}`)}:${commitSha}`;
       const buildResult = await buildImage({
         repoPath,
         imageName,
@@ -319,6 +367,10 @@ async function runServiceDeployment(
 
       if (!buildResult.success) {
         throw new Error(buildResult.error || "Build failed");
+      }
+
+      if (await isDeploymentCancelled(deploymentId)) {
+        return;
       }
     }
 
@@ -403,6 +455,17 @@ async function runServiceDeployment(
       })
       .where("id", "=", deploymentId)
       .execute();
+
+    if (await isDeploymentCancelled(deploymentId)) {
+      return;
+    }
+
+    if (service.currentDeploymentId) {
+      const oldContainerName = sanitizeDockerName(
+        `frost-${service.id}-${service.currentDeploymentId}`,
+      );
+      await stopContainer(oldContainerName);
+    }
 
     const hostPort = await getAvailablePort();
     const runResult = await runContainer({
@@ -616,6 +679,32 @@ export async function rollbackDeployment(
     throw new Error("Image no longer available");
   }
 
+  const inProgressStatuses = [
+    "pending",
+    "cloning",
+    "pulling",
+    "building",
+    "deploying",
+  ];
+  const activeDeployments = await db
+    .selectFrom("deployments")
+    .select(["id", "containerId"])
+    .where("serviceId", "=", service.id)
+    .where("id", "!=", deploymentId)
+    .where("status", "in", inProgressStatuses)
+    .execute();
+
+  for (const dep of activeDeployments) {
+    if (dep.containerId) {
+      await stopContainer(dep.containerId);
+    }
+    await db
+      .updateTable("deployments")
+      .set({ status: "cancelled", finishedAt: Date.now() })
+      .where("id", "=", dep.id)
+      .execute();
+  }
+
   await updateDeployment(deploymentId, { status: "deploying" });
 
   runRollbackDeployment(deploymentId, targetDeployment, service, project).catch(
@@ -639,8 +728,10 @@ async function runRollbackDeployment(
   service: Selectable<Service>,
   project: Selectable<Project>,
 ) {
-  const containerName = `frost-${project.id}-${service.name}`.toLowerCase();
-  const networkName = `frost-net-${project.id}`.toLowerCase();
+  const containerName = sanitizeDockerName(
+    `frost-${service.id}-${deploymentId}`,
+  );
+  const networkName = sanitizeDockerName(`frost-net-${project.id}`);
 
   const baseLabels = {
     "frost.managed": "true",
@@ -665,6 +756,13 @@ async function runRollbackDeployment(
     );
 
     await createNetwork(networkName, baseLabels);
+
+    if (service.currentDeploymentId) {
+      const oldContainerName = sanitizeDockerName(
+        `frost-${service.id}-${service.currentDeploymentId}`,
+      );
+      await stopContainer(oldContainerName);
+    }
 
     const hostPort = await getAvailablePort();
     const runResult = await runContainer({
