@@ -5,7 +5,6 @@ import {
   useMonitoringHistory,
   useMonitoringStats,
 } from "@/hooks/use-monitoring";
-import { ContainerMetrics } from "./_components/container-metrics";
 import { SystemOverview } from "./_components/system-overview";
 import { TimeRangeSelector } from "./_components/time-range-selector";
 
@@ -21,7 +20,7 @@ export default function MonitoringPage() {
         <div>
           <h1 className="text-xl font-semibold text-white">Monitoring</h1>
           <p className="mt-1 text-sm text-neutral-400">
-            Real-time system and container metrics
+            Real-time system metrics
           </p>
         </div>
         <TimeRangeSelector value={range} onChange={setRange} />
@@ -31,11 +30,6 @@ export default function MonitoringPage() {
         snapshot={snapshot}
         history={history}
         isLoading={statsLoading || historyLoading}
-      />
-
-      <ContainerMetrics
-        containers={snapshot?.containers || []}
-        isLoading={statsLoading}
       />
     </div>
   );
