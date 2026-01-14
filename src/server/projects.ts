@@ -4,13 +4,14 @@ import { z } from "zod";
 import { getSetting } from "@/lib/auth";
 import { db } from "@/lib/db";
 import {
-  deploymentSchema,
-  projectSchema,
-  serviceSchema,
+  deploymentsSchema,
+  projectsSchema,
+  servicesSchema,
 } from "@/lib/db-schemas";
 import { deployProject } from "@/lib/deployer";
 import { removeNetwork, stopContainer } from "@/lib/docker";
 import { os } from "@/lib/orpc";
+import { slugify } from "@/lib/slugify";
 
 const envVarSchema = z.object({
   key: z.string(),
@@ -24,18 +25,18 @@ const latestDeploymentSchema = z.object({
   branch: z.string().nullable(),
 });
 
-const projectListItemSchema = projectSchema.extend({
+const projectListItemSchema = projectsSchema.extend({
   servicesCount: z.number(),
   latestDeployment: latestDeploymentSchema.nullable(),
   repoUrl: z.string().nullable(),
   runningUrl: z.string().nullable(),
 });
 
-const serviceWithDeploymentSchema = serviceSchema.extend({
-  latestDeployment: deploymentSchema.nullable(),
+const serviceWithDeploymentSchema = servicesSchema.extend({
+  latestDeployment: deploymentsSchema.nullable(),
 });
 
-const projectWithServicesSchema = projectSchema.extend({
+const projectWithServicesSchema = projectsSchema.extend({
   services: z.array(serviceWithDeploymentSchema),
 });
 
@@ -154,16 +155,18 @@ export const projects = {
         envVars: z.array(envVarSchema).default([]),
       }),
     )
-    .output(projectSchema)
+    .output(projectsSchema)
     .handler(async ({ input }) => {
       const id = nanoid();
       const now = Date.now();
+      const hostname = slugify(input.name);
 
       await db
         .insertInto("projects")
         .values({
           id,
           name: input.name,
+          hostname,
           envVars: JSON.stringify(input.envVars),
           createdAt: now,
         })
@@ -193,7 +196,7 @@ export const projects = {
         envVars: z.array(envVarSchema).optional(),
       }),
     )
-    .output(projectSchema)
+    .output(projectsSchema)
     .handler(async ({ input }) => {
       const project = await db
         .selectFrom("projects")

@@ -6,7 +6,7 @@ import type { Selectable } from "kysely";
 import { nanoid } from "nanoid";
 import { decrypt } from "./crypto";
 import { db } from "./db";
-import type { Project, Registrie, Service } from "./db-types";
+import type { Projects, Registries, Services } from "./db-types";
 import {
   buildImage,
   createNetwork,
@@ -158,8 +158,8 @@ function detectRegistryFromImage(imageUrl: string): string | null {
 }
 
 async function getRegistryForPull(
-  service: Selectable<Service>,
-): Promise<Selectable<Registrie> | null> {
+  service: Selectable<Services>,
+): Promise<Selectable<Registries> | null> {
   if (service.registryId) {
     const registry = await db
       .selectFrom("registries")
@@ -188,8 +188,8 @@ async function getRegistryForPull(
 
 function buildFrostEnvVars(
   deploymentId: string,
-  service: Selectable<Service>,
-  project: Selectable<Project>,
+  service: Selectable<Services>,
+  project: Selectable<Projects>,
   gitInfo?: { commitSha: string; branch: string },
 ): Record<string, string> {
   const vars: Record<string, string> = {
@@ -199,7 +199,7 @@ function buildFrostEnvVars(
     FROST_PROJECT_NAME: project.name,
     FROST_PROJECT_ID: project.id,
     FROST_DEPLOYMENT_ID: deploymentId,
-    FROST_INTERNAL_HOSTNAME: service.name,
+    FROST_INTERNAL_HOSTNAME: service.hostname ?? service.name,
   };
   if (gitInfo) {
     vars.FROST_GIT_COMMIT_SHA = gitInfo.commitSha;
@@ -328,8 +328,8 @@ export async function deployService(
 
 async function runServiceDeployment(
   deploymentId: string,
-  service: Selectable<Service>,
-  project: Selectable<Project>,
+  service: Selectable<Services>,
+  project: Selectable<Projects>,
   options?: DeployOptions,
 ) {
   let currentCommitSha = options?.commitSha || "HEAD";
@@ -611,7 +611,7 @@ async function runServiceDeployment(
         name: containerName,
         envVars: runtimeEnvVars,
         network: networkName,
-        hostname: service.name,
+        hostname: service.hostname ?? service.name,
         labels: {
           ...baseLabels,
           "frost.deployment.id": deploymentId,
@@ -869,8 +869,8 @@ async function runRollbackDeployment(
     gitCommitSha: string | null;
     gitBranch: string | null;
   },
-  service: Selectable<Service>,
-  project: Selectable<Project>,
+  service: Selectable<Services>,
+  project: Selectable<Projects>,
 ) {
   const containerName = sanitizeDockerName(
     `frost-${service.id}-${deploymentId}`,
@@ -934,7 +934,7 @@ async function runRollbackDeployment(
         name: containerName,
         envVars: runtimeEnvVars,
         network: networkName,
-        hostname: service.name,
+        hostname: service.hostname ?? service.name,
         labels: {
           ...baseLabels,
           "frost.deployment.id": deploymentId,

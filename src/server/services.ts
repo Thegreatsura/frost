@@ -2,12 +2,13 @@ import { ORPCError } from "@orpc/server";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { deploymentSchema, serviceSchema } from "@/lib/db-schemas";
+import { deploymentsSchema, servicesSchema } from "@/lib/db-schemas";
 import { generateCredential, getTemplate } from "@/lib/db-templates";
 import { deployService } from "@/lib/deployer";
 import { stopContainer } from "@/lib/docker";
 import { createWildcardDomain, syncCaddyConfig } from "@/lib/domains";
 import { os } from "@/lib/orpc";
+import { slugify } from "@/lib/slugify";
 import { generateSelfSignedCert, removeSSLCerts } from "@/lib/ssl";
 import { buildVolumeName, getVolumeSize, removeVolume } from "@/lib/volumes";
 
@@ -18,8 +19,8 @@ const envVarSchema = z.object({
 
 const idParamSchema = z.object({ id: z.string() });
 
-const serviceWithDeploymentSchema = serviceSchema.extend({
-  latestDeployment: deploymentSchema.nullable(),
+const serviceWithDeploymentSchema = servicesSchema.extend({
+  latestDeployment: deploymentsSchema.nullable(),
 });
 
 export const services = {
@@ -102,7 +103,7 @@ export const services = {
         registryId: z.string().optional(),
       }),
     )
-    .output(serviceSchema)
+    .output(servicesSchema)
     .handler(async ({ input }) => {
       if (input.deployType === "repo" && !input.repoUrl) {
         throw new ORPCError("BAD_REQUEST", {
@@ -130,7 +131,7 @@ export const services = {
 
       const project = await db
         .selectFrom("projects")
-        .select(["id", "name"])
+        .select(["id", "name", "hostname"])
         .where("id", "=", input.projectId)
         .executeTakeFirst();
 
@@ -153,6 +154,7 @@ export const services = {
 
       const id = nanoid();
       const now = Date.now();
+      const hostname = slugify(input.name);
 
       if (input.deployType === "database") {
         const template = getTemplate(input.templateId!)!;
@@ -167,6 +169,7 @@ export const services = {
             id,
             projectId: input.projectId,
             name: input.name,
+            hostname,
             deployType: "image",
             repoUrl: null,
             branch: null,
@@ -192,6 +195,7 @@ export const services = {
             id,
             projectId: input.projectId,
             name: input.name,
+            hostname,
             deployType: input.deployType,
             repoUrl: input.deployType === "repo" ? input.repoUrl! : null,
             branch: input.deployType === "repo" ? input.branch : null,
@@ -226,7 +230,11 @@ export const services = {
       }
 
       if (input.deployType !== "database") {
-        await createWildcardDomain(id, input.name, project.name);
+        await createWildcardDomain(
+          id,
+          hostname,
+          project.hostname ?? slugify(project.name),
+        );
       }
 
       deployService(id).catch((err) => {
@@ -270,7 +278,7 @@ export const services = {
         registryId: z.string().nullable().optional(),
       }),
     )
-    .output(serviceSchema)
+    .output(servicesSchema)
     .handler(async ({ input }) => {
       const service = await db
         .selectFrom("services")
@@ -402,7 +410,7 @@ export const services = {
   listDeployments: os
     .route({ method: "GET", path: "/services/{id}/deployments" })
     .input(idParamSchema)
-    .output(z.array(deploymentSchema))
+    .output(z.array(deploymentsSchema))
     .handler(async ({ input }) => {
       const deployments = await db
         .selectFrom("deployments")
