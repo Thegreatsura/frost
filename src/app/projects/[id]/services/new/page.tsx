@@ -54,6 +54,16 @@ export default function NewServicePage() {
     queryFn: () => api.dbTemplates.list(),
   });
 
+  const { data: registries } = useQuery({
+    queryKey: ["registries"],
+    queryFn: async () => {
+      const res = await fetch("/api/registries");
+      return res.json();
+    },
+  });
+
+  const [selectedRegistryId, setSelectedRegistryId] = useState<string>("");
+
   function handleTemplateChange(templateId: string) {
     setSelectedTemplate(templateId);
     const template = SERVICE_TEMPLATES.find((t) => t.id === templateId);
@@ -101,6 +111,9 @@ export default function NewServicePage() {
         (formData.get("dockerfile_path") as string) || "Dockerfile";
     } else if (deployType === "image") {
       data.imageUrl = formData.get("image_url") as string;
+      if (selectedRegistryId && selectedRegistryId !== "auto") {
+        data.registryId = selectedRegistryId;
+      }
     } else if (deployType === "database") {
       data.templateId = selectedDbTemplate;
     }
@@ -370,6 +383,59 @@ export default function NewServicePage() {
                         Docker Hub image or full registry URL (e.g.,
                         ghcr.io/user/image:tag)
                       </p>
+                    </div>
+
+                    <div className="grid gap-3">
+                      <Label className="text-neutral-300">Registry</Label>
+                      {registries && registries.length > 0 ? (
+                        <>
+                          <Select
+                            value={selectedRegistryId}
+                            onValueChange={setSelectedRegistryId}
+                          >
+                            <SelectTrigger className="border-neutral-700 bg-neutral-800 text-neutral-100">
+                              <SelectValue placeholder="Auto-detect from image URL" />
+                            </SelectTrigger>
+                            <SelectContent className="border-neutral-700 bg-neutral-800">
+                              <SelectItem
+                                value="auto"
+                                className="text-neutral-100 focus:bg-neutral-700 focus:text-neutral-100"
+                              >
+                                Auto-detect from image URL
+                              </SelectItem>
+                              {registries.map(
+                                (r: {
+                                  id: string;
+                                  name: string;
+                                  type: string;
+                                }) => (
+                                  <SelectItem
+                                    key={r.id}
+                                    value={r.id}
+                                    className="text-neutral-100 focus:bg-neutral-700 focus:text-neutral-100"
+                                  >
+                                    {r.name}
+                                  </SelectItem>
+                                ),
+                              )}
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-neutral-500">
+                            Credentials for private registries. Auto-detect uses
+                            the registry matching the image URL.
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-xs text-neutral-500">
+                          Pulling from a private registry?{" "}
+                          <a
+                            href="/settings/registries"
+                            className="text-blue-400 hover:underline"
+                          >
+                            Add credentials in Settings
+                          </a>
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}
