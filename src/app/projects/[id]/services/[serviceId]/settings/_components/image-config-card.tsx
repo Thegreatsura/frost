@@ -121,12 +121,15 @@ export function ImageConfigCard({
         </div>
         <div>
           <span className="mb-2 block text-sm text-neutral-400">Registry</span>
-          <Select value={registryId} onValueChange={setRegistryId}>
+          <Select
+            value={registryId || "__auto__"}
+            onValueChange={(v) => setRegistryId(v === "__auto__" ? "" : v)}
+          >
             <SelectTrigger className="w-48">
               <SelectValue placeholder="Auto-detect" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Auto-detect</SelectItem>
+              <SelectItem value="__auto__">Auto-detect</SelectItem>
               {registries?.map((reg) => (
                 <SelectItem key={reg.id} value={reg.id}>
                   {reg.name}
