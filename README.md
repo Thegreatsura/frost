@@ -1,8 +1,6 @@
 # Frost
 
-Vercel DX for Docker infrastructure.
-
-Open source PaaS combining Railway's infrastructure scope with Vercel's developer experience.
+Open source Railway alternative.
 
 ## Features
 
