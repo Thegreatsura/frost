@@ -1,0 +1,15 @@
+# Environment Variables
+
+Set environment variables at two levels:
+
+**Project-level** - Inherited by all services in the project.
+
+**Service-level** - Specific to one service. Overrides project variables with the same name.
+
+## Built-in Variables
+
+Frost automatically sets `PORT` (default 8080). Your app should listen on this port.
+
+## Applying Changes
+
+After modifying environment variables, redeploy the service for changes to take effect.

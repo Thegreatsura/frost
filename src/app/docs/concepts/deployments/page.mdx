@@ -1,0 +1,19 @@
+# Deployments
+
+A **deployment** is a record of a service deployment attempt.
+
+## Status
+
+| Status | Description |
+|--------|-------------|
+| `pending` | Queued |
+| `cloning` | Cloning git repository |
+| `pulling` | Pulling Docker image |
+| `building` | Building Docker image |
+| `deploying` | Starting container |
+| `running` | Container healthy |
+| `failed` | Deployment failed |
+
+## Rollback
+
+To rollback, go to deployment history and click **Rollback** on a previous successful deployment.

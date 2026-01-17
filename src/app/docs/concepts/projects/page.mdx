@@ -1,0 +1,14 @@
+# Projects
+
+A **project** groups related services together. Projects provide:
+
+- Shared environment variables inherited by all services
+- Isolated Docker network for inter-service communication
+
+## Networking
+
+Services in the same project can communicate using the service name as hostname:
+
+```
+http://api:8080/health
+```

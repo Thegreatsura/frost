@@ -1,0 +1,17 @@
+# Troubleshooting
+
+## Build Failed
+
+Check the build logs in deployment details. Common causes: missing Dockerfile, syntax errors, missing dependencies.
+
+## Container Exits Immediately
+
+Check container logs in deployment details. Ensure your app listens on the `PORT` environment variable (default 8080).
+
+## Domain Not Working
+
+Verify DNS is pointing to your server's IP. Use [dnschecker.org](https://dnschecker.org) to check propagation.
+
+## Still Stuck?
+
+[Open an issue](https://github.com/elitan/frost/issues) on GitHub.
