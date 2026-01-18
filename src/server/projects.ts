@@ -253,6 +253,7 @@ export const projects = {
         id: z.string(),
         name: z.string().optional(),
         envVars: z.array(envVarSchema).optional(),
+        canvasPositions: z.string().optional(),
       }),
     )
     .output(projectsSchema)
@@ -273,6 +274,9 @@ export const projects = {
       }
       if (input.envVars !== undefined) {
         updates.envVars = JSON.stringify(input.envVars);
+      }
+      if (input.canvasPositions !== undefined) {
+        updates.canvasPositions = input.canvasPositions;
       }
 
       if (Object.keys(updates).length > 0) {

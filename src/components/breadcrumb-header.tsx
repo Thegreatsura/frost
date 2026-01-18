@@ -15,7 +15,7 @@ interface BreadcrumbHeaderProps {
 
 export function BreadcrumbHeader({ items, actions }: BreadcrumbHeaderProps) {
   return (
-    <header className="border-b border-neutral-800">
+    <div className="border-b border-neutral-800">
       <div className="container mx-auto flex h-14 items-center gap-2 px-4">
         <Link
           href="/"
@@ -26,7 +26,7 @@ export function BreadcrumbHeader({ items, actions }: BreadcrumbHeaderProps) {
         {items.map((item) => (
           <div
             key={item.href ?? item.label}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2.5"
           >
             <span className="text-neutral-600">/</span>
             {item.href ? (
@@ -46,6 +46,6 @@ export function BreadcrumbHeader({ items, actions }: BreadcrumbHeaderProps) {
           <HeaderNav />
         </div>
       </div>
-    </header>
+    </div>
   );
 }

@@ -11,6 +11,7 @@ export interface Project {
   hostname: string | null;
   envVars: string;
   createdAt: number;
+  canvasPositions?: string | null;
   services?: Service[];
   servicesCount?: number;
   latestDeployment?: ProjectLatestDeployment | null;
@@ -130,6 +131,7 @@ export interface CreateProjectInput {
 export interface UpdateProjectInput {
   name?: string;
   envVars?: EnvVar[];
+  canvasPositions?: string;
 }
 
 export interface CreateServiceInput {
@@ -412,6 +414,13 @@ export const api = {
     list: (): Promise<DatabaseTemplate[]> =>
       fetch("/api/db-templates").then((r) =>
         handleResponse<DatabaseTemplate[]>(r),
+      ),
+  },
+
+  serviceTemplates: {
+    list: (): Promise<Template[]> =>
+      fetch("/api/templates/services").then((r) =>
+        handleResponse<Template[]>(r),
       ),
   },
 
