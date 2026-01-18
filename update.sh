@@ -89,6 +89,11 @@ fi
 
 cd "$FROST_DIR"
 
+# Ensure FROST_DATA_DIR is set (required since v0.8.0 monorepo)
+if [ -f "$FROST_DIR/.env" ]; then
+  grep -q FROST_DATA_DIR "$FROST_DIR/.env" || echo "FROST_DATA_DIR=$FROST_DIR/data" >> "$FROST_DIR/.env"
+fi
+
 # Ensure bun is in PATH
 export HOME="${HOME:-/root}"
 export BUN_INSTALL="$HOME/.bun"
