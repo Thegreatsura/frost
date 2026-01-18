@@ -259,8 +259,14 @@ mkdir -p "$FROST_DIR/data"
 # Create .env file
 cat > "$FROST_DIR/.env" << EOF
 FROST_JWT_SECRET=$FROST_JWT_SECRET
+FROST_DATA_DIR=$FROST_DIR/data
 NODE_ENV=production
 EOF
+
+# For branch mode, symlink .env to apps/app so it's accessible when running from there
+if [ "$USE_TARBALL" = false ] && [ -d "$FROST_DIR/apps/app" ]; then
+  ln -sf "$FROST_DIR/.env" "$FROST_DIR/apps/app/.env"
+fi
 
 timer "Running migrations..."
 bun run migrate
@@ -355,7 +361,11 @@ echo -e "Frost is running at: ${GREEN}http://$SERVER_IP${NC}"
 if [ "$CREATE_API_KEY" = true ]; then
   echo ""
   timer "Creating API key..."
-  FROST_API_KEY=$(FROST_JWT_SECRET="$FROST_JWT_SECRET" bun run scripts/create-api-key.ts install)
+  if [ "$USE_TARBALL" = true ]; then
+    FROST_API_KEY=$(FROST_JWT_SECRET="$FROST_JWT_SECRET" FROST_DATA_DIR="$FROST_DIR/data" bun run scripts/create-api-key.ts install)
+  else
+    FROST_API_KEY=$(FROST_JWT_SECRET="$FROST_JWT_SECRET" FROST_DATA_DIR="$FROST_DIR/data" bun --cwd apps/app scripts/create-api-key.ts install)
+  fi
   echo -e "API Key: ${YELLOW}$FROST_API_KEY${NC}"
   echo "(use with X-Frost-Token header)"
 fi

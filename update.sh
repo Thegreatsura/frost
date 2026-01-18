@@ -37,11 +37,12 @@ cleanup_on_failure() {
   error "Update failed!"
   echo "failed" > "$UPDATE_RESULT"
 
-  if [ -d "$BACKUP_DIR/.next" ]; then
-    # Git mode: only .next was backed up
-    log "Restoring previous build..."
-    rm -rf "$FROST_DIR/.next"
-    mv "$BACKUP_DIR/.next" "$FROST_DIR/.next"
+  if [ -f "$BACKUP_DIR/commit" ]; then
+    # Git mode: restore to previous commit
+    log "Restoring previous commit..."
+    PREV_COMMIT=$(cat "$BACKUP_DIR/commit")
+    cd "$FROST_DIR"
+    git reset --hard "$PREV_COMMIT" 2>/dev/null || true
     rm -rf "$BACKUP_DIR"
   elif [ -d "$BACKUP_DIR" ]; then
     # Tarball mode: full backup
@@ -123,10 +124,14 @@ else
   exit 1
 fi
 
-CURRENT_VERSION=$(cat package.json | grep '"version"' | head -1 | sed 's/.*"version": "\([^"]*\)".*/\1/')
+# Detect mode: git-based (dev/CI) or tarball (production)
+if [ -d "$FROST_DIR/.git" ]; then
+  CURRENT_VERSION=$(cat apps/app/package.json | grep '"version"' | head -1 | sed 's/.*"version": "\([^"]*\)".*/\1/')
+else
+  CURRENT_VERSION=$(cat package.json | grep '"version"' | head -1 | sed 's/.*"version": "\([^"]*\)".*/\1/')
+fi
 log "Current version: $CURRENT_VERSION"
 
-# Detect mode: git-based (dev/CI) or tarball (production)
 if [ -d "$FROST_DIR/.git" ]; then
   # Git mode: pull and rebuild (for dev installs and CI testing)
   log "Git mode detected"
@@ -153,10 +158,10 @@ if [ -d "$FROST_DIR/.git" ]; then
     systemctl stop frost 2>/dev/null || true
   fi
 
-  log "Backing up current build..."
+  log "Backing up current commit..."
   rm -rf "$BACKUP_DIR"
   mkdir -p "$BACKUP_DIR"
-  [ -d "$FROST_DIR/.next" ] && cp -r "$FROST_DIR/.next" "$BACKUP_DIR/.next"
+  echo "$LOCAL" > "$BACKUP_DIR/commit"
 
   log "Pulling updates..."
   git reset --hard origin/main 2>/dev/null || git reset --hard @{u}
@@ -165,12 +170,12 @@ if [ -d "$FROST_DIR/.git" ]; then
   bun install 2>&1
 
   log "Building..."
-  NEXT_TELEMETRY_DISABLED=1 npm run build 2>&1
+  NEXT_TELEMETRY_DISABLED=1 bun run build 2>&1
 
   log "Running migrations..."
   bun run migrate 2>&1
 
-  NEW_VERSION=$(cat package.json | grep '"version"' | head -1 | sed 's/.*"version": "\([^"]*\)".*/\1/')
+  NEW_VERSION=$(cat apps/app/package.json | grep '"version"' | head -1 | sed 's/.*"version": "\([^"]*\)".*/\1/')
   rm -rf "$BACKUP_DIR"
 
   echo "success:$NEW_VERSION" > "$UPDATE_RESULT"
