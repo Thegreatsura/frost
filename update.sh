@@ -94,6 +94,11 @@ if [ -f "$FROST_DIR/.env" ]; then
   grep -q FROST_DATA_DIR "$FROST_DIR/.env" || echo "FROST_DATA_DIR=$FROST_DIR/data" >> "$FROST_DIR/.env"
 fi
 
+# Ensure .env symlink exists for monorepo (apps/app needs access to root .env)
+if [ -d "$FROST_DIR/apps/app" ] && [ ! -L "$FROST_DIR/apps/app/.env" ]; then
+  ln -sf "$FROST_DIR/.env" "$FROST_DIR/apps/app/.env"
+fi
+
 # Ensure bun is in PATH
 export HOME="${HOME:-/root}"
 export BUN_INSTALL="$HOME/.bun"

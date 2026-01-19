@@ -190,10 +190,12 @@ jobs:
           BRANCH="${{ github.head_ref || github.ref_name }}"
           REPO="${{ github.repository }}"
 
-          echo "Upgrading from ${{ steps.release.outputs.tag }} to branch: $BRANCH"
+          echo "Upgrading from ${{ steps.release.outputs.tag }} to branch: $BRANCH using update.sh"
+
+          # Fetch PR branch update.sh to use during upgrade
+          curl -fsSL "https://raw.githubusercontent.com/${REPO}/${BRANCH}/update.sh" -o /tmp/update.sh
 
           ssh -o ServerAliveInterval=30 root@${{ steps.server.outputs.ip }} "cd /opt/frost && \
-            systemctl stop frost && \
             git config --global --add safe.directory /opt/frost && \
             if [ ! -d .git ]; then \
               echo 'Initializing git repo (tarball installation detected)'; \
@@ -202,19 +204,15 @@ jobs:
             else \
               git remote set-url origin https://github.com/${REPO}.git; \
             fi && \
-            git fetch origin ${BRANCH} && \
-            git checkout -f -B ${BRANCH} origin/${BRANCH} && \
-            rm -rf node_modules package-lock.json && \
-            export BUN_INSTALL=\"\$HOME/.bun\" && \
-            export PATH=\"\$BUN_INSTALL/bin:\$PATH\" && \
-            NODE_ENV=development npm install --legacy-peer-deps --silent 2>&1 && \
-            npm run build 2>&1 && \
-            grep -q FROST_DATA_DIR .env || echo 'FROST_DATA_DIR=/opt/frost/data' >> .env && \
-            ln -sf /opt/frost/.env /opt/frost/apps/app/.env && \
-            bun run migrate 2>&1 && \
-            sed -i 's|ExecStart=.*bun.*|ExecStart=/usr/bin/npm run start|' /etc/systemd/system/frost.service && \
-            systemctl daemon-reload && \
-            systemctl start frost"
+            git fetch origin ${BRANCH}:refs/remotes/origin/main -f"
+
+          # Copy PR branch's update.sh to server and make it use our fake origin/main
+          scp /tmp/update.sh root@${{ steps.server.outputs.ip }}:/opt/frost/update.sh
+          ssh root@${{ steps.server.outputs.ip }} "chmod +x /opt/frost/update.sh && \
+            sed -i 's|git fetch origin main.*|:|' /opt/frost/update.sh"
+
+          # Run actual update.sh
+          ssh -o ServerAliveInterval=30 root@${{ steps.server.outputs.ip }} "/opt/frost/update.sh"
 
       - name: Initialize test fixture git repos
         if: steps.release.outputs.skip != 'true'
