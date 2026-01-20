@@ -628,10 +628,10 @@ function DomainRow({
   verificationState,
 }: DomainRowProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const isVerified = domain.dnsVerified === true;
+  const isVerified = Boolean(domain.dnsVerified);
   const isActive = domain.sslStatus === "active";
   const isFailed = domain.sslStatus === "failed";
-  const isSystem = domain.isSystem === true;
+  const isSystem = Boolean(domain.isSystem);
   const subdomain = extractSubdomain(domain.domain);
 
   return (
