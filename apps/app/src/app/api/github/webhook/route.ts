@@ -1,10 +1,24 @@
 import { NextResponse } from "next/server";
 import { deployService } from "@/lib/deployer";
-import { getGitHubAppCredentials } from "@/lib/github";
 import {
+  createPRComment,
+  findOpenPRsForBranch,
+  getGitHubAppCredentials,
+  updatePRComment,
+} from "@/lib/github";
+import { slugify } from "@/lib/slugify";
+import {
+  buildPRCommentBody,
+  cloneServiceToEnvironment,
+  createBranchEnvironment,
+  deleteBranchEnvironment,
+  findBranchEnvironment,
   findMatchingServices,
+  findProductionServicesForRepo,
+  getEnvironmentServiceStatuses,
   hasExistingDeployment,
-  shouldTriggerDeploy,
+  type ServiceDeployStatus,
+  updateEnvironmentPRCommentId,
   verifyWebhookSignature,
 } from "@/lib/webhook";
 
@@ -19,6 +33,28 @@ interface PushPayload {
   head_commit: {
     message: string;
   } | null;
+}
+
+interface PullRequestPayload {
+  action: string;
+  number: number;
+  pull_request: {
+    head: {
+      ref: string;
+      sha: string;
+    };
+  };
+  repository: {
+    clone_url: string;
+  };
+}
+
+interface DeletePayload {
+  ref: string;
+  ref_type: "branch" | "tag";
+  repository: {
+    clone_url: string;
+  };
 }
 
 export async function POST(request: Request) {
@@ -50,18 +86,36 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "pong" });
   }
 
+  if (event === "pull_request") {
+    return handlePullRequest(rawBody);
+  }
+
+  if (event === "delete") {
+    return handleDelete(rawBody);
+  }
+
   if (event !== "push") {
     return NextResponse.json({ message: `Ignored event: ${event}` });
   }
 
-  const payload: PushPayload = JSON.parse(rawBody);
-  const { ref, after: commitSha, repository, head_commit } = payload;
+  return handlePush(rawBody);
+}
 
-  if (!shouldTriggerDeploy(ref, repository.default_branch)) {
-    return NextResponse.json({
-      message: `Ignored push to non-default branch: ${ref}`,
-    });
+async function handlePush(rawBody: string) {
+  const payload: PushPayload = JSON.parse(rawBody);
+  const { ref, repository } = payload;
+  const branch = ref.replace("refs/heads/", "");
+  const isDefaultBranch = branch === repository.default_branch;
+
+  if (isDefaultBranch) {
+    return handleProductionPush(payload);
   }
+
+  return handleBranchPush(payload);
+}
+
+async function handleProductionPush(payload: PushPayload) {
+  const { after: commitSha, repository, head_commit } = payload;
 
   const matchedServices = await findMatchingServices(repository.clone_url);
 
@@ -96,5 +150,205 @@ export async function POST(request: Request) {
   return NextResponse.json({
     message: `Triggered ${deploymentIds.length} deployment(s)`,
     deployments: deploymentIds,
+  });
+}
+
+async function handleBranchPush(payload: PushPayload) {
+  const { ref, after: commitSha, repository, head_commit } = payload;
+  const branch = ref.replace("refs/heads/", "");
+
+  const productionServices = await findProductionServicesForRepo(
+    repository.clone_url,
+  );
+
+  if (productionServices.length === 0) {
+    return NextResponse.json({
+      message: "No matching production services found",
+    });
+  }
+
+  const projectId = productionServices[0].projectId;
+  const projectHostname =
+    productionServices[0].projectHostname ?? slugify(projectId);
+
+  const environmentId = await createBranchEnvironment(projectId, branch);
+  const envName = `branch-${slugify(branch)}`;
+
+  const deploymentIds: string[] = [];
+  const serviceStatuses: ServiceDeployStatus[] = [];
+
+  for (const service of productionServices) {
+    const clonedServiceId = await cloneServiceToEnvironment(service, {
+      environmentId,
+      projectHostname,
+      envName,
+      targetBranch: branch,
+    });
+
+    if (await hasExistingDeployment(clonedServiceId, commitSha)) {
+      console.log(
+        `Skipping deployment for service ${clonedServiceId}: existing deployment with same commit`,
+      );
+      continue;
+    }
+
+    try {
+      const deploymentId = await deployService(clonedServiceId, {
+        commitSha,
+        commitMessage: head_commit?.message || `Branch: ${branch}`,
+      });
+      deploymentIds.push(deploymentId);
+      serviceStatuses.push({
+        name: service.name,
+        hostname: service.hostname ?? slugify(service.name),
+        status: "deploying",
+        url: null,
+      });
+    } catch (err) {
+      console.error(`Failed to deploy service ${clonedServiceId}:`, err);
+      serviceStatuses.push({
+        name: service.name,
+        hostname: service.hostname ?? slugify(service.name),
+        status: "failed",
+        url: null,
+      });
+    }
+  }
+
+  await updatePRCommentForBranch(
+    repository.clone_url,
+    projectId,
+    branch,
+    commitSha,
+    serviceStatuses,
+  );
+
+  return NextResponse.json({
+    message: `Created branch preview for ${branch}`,
+    environmentId,
+    deployments: deploymentIds,
+  });
+}
+
+async function updatePRCommentForBranch(
+  repoUrl: string,
+  projectId: string,
+  branch: string,
+  commitSha: string,
+  services: ServiceDeployStatus[],
+) {
+  try {
+    const openPRs = await findOpenPRsForBranch(repoUrl, branch);
+    if (openPRs.length === 0) return;
+
+    const prNumber = openPRs[0].number;
+    const env = await findBranchEnvironment(projectId, branch);
+    if (!env) return;
+
+    const body = buildPRCommentBody(services, branch, commitSha);
+
+    if (env.prCommentId) {
+      await updatePRComment(repoUrl, env.prCommentId, body);
+    } else {
+      const commentId = await createPRComment(repoUrl, prNumber, body);
+      await updateEnvironmentPRCommentId(env.id, commentId);
+    }
+  } catch (err) {
+    console.error("Failed to update PR comment:", err);
+  }
+}
+
+async function handleDelete(rawBody: string) {
+  const payload: DeletePayload = JSON.parse(rawBody);
+  const { ref, ref_type, repository } = payload;
+
+  if (ref_type !== "branch") {
+    return NextResponse.json({ message: `Ignored delete: ${ref_type}` });
+  }
+
+  const productionServices = await findProductionServicesForRepo(
+    repository.clone_url,
+  );
+
+  if (productionServices.length === 0) {
+    return NextResponse.json({
+      message: "No matching production services found",
+    });
+  }
+
+  const projectId = productionServices[0].projectId;
+  const deleted = await deleteBranchEnvironment(projectId, ref);
+
+  return NextResponse.json({
+    message: deleted
+      ? `Deleted branch environment for ${ref}`
+      : `No branch environment found for ${ref}`,
+  });
+}
+
+async function handlePullRequest(rawBody: string) {
+  const payload: PullRequestPayload = JSON.parse(rawBody);
+  const { action, number: prNumber, pull_request, repository } = payload;
+
+  const shouldComment = action === "opened" || action === "synchronize";
+  const shouldDelete = action === "closed";
+
+  if (!shouldComment && !shouldDelete) {
+    return NextResponse.json({
+      message: `Ignored pull_request action: ${action}`,
+    });
+  }
+
+  const productionServices = await findProductionServicesForRepo(
+    repository.clone_url,
+  );
+
+  if (productionServices.length === 0) {
+    return NextResponse.json({
+      message: "No matching production services found",
+    });
+  }
+
+  const projectId = productionServices[0].projectId;
+  const branch = pull_request.head.ref;
+
+  if (shouldDelete) {
+    const deleted = await deleteBranchEnvironment(projectId, branch);
+    return NextResponse.json({
+      message: deleted
+        ? `Deleted branch environment for PR #${prNumber}`
+        : `No branch environment found for PR #${prNumber}`,
+    });
+  }
+
+  const env = await findBranchEnvironment(projectId, branch);
+  if (!env) {
+    return NextResponse.json({
+      message: `No branch environment found for ${branch}, waiting for push`,
+    });
+  }
+
+  const commitSha = pull_request.head.sha;
+  const services = await getEnvironmentServiceStatuses(env.id, projectId);
+  const body = buildPRCommentBody(services, branch, commitSha);
+
+  try {
+    if (env.prCommentId) {
+      await updatePRComment(repository.clone_url, env.prCommentId, body);
+    } else {
+      const commentId = await createPRComment(
+        repository.clone_url,
+        prNumber,
+        body,
+      );
+      await updateEnvironmentPRCommentId(env.id, commentId);
+    }
+  } catch (err) {
+    console.error("Failed to create/update PR comment:", err);
+  }
+
+  return NextResponse.json({
+    message: `Updated PR comment for #${prNumber}`,
+    environmentId: env.id,
   });
 }

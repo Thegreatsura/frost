@@ -67,6 +67,7 @@ function calculateViewportForNode(
 
 interface CanvasViewProps {
   projectId: string;
+  environmentId: string;
   services: Service[];
   initialPositions: CanvasPositions;
   domains: Record<string, string>;
@@ -78,6 +79,7 @@ interface CanvasViewProps {
 
 function CanvasViewInner({
   projectId,
+  environmentId,
   services,
   initialPositions,
   domains,
@@ -91,10 +93,11 @@ function CanvasViewInner({
     initialPositions,
   );
   const { fitView, zoomIn, zoomOut, setViewport, getZoom } = useReactFlow();
-  const deleteMutation = useDeleteService(projectId);
+  const deleteMutation = useDeleteService(environmentId);
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasMovedRef = useRef(false);
   const ignoreMoveRef = useRef(false);
+  const paneClickRef = useRef(false);
   const prevSelectedRef = useRef<string | null>(null);
 
   const [nodes, setNodes] = useState<ServiceNodeType[]>([]);
@@ -229,12 +232,18 @@ function CanvasViewInner({
       ignoreMoveRef.current = false;
       return;
     }
+    if (paneClickRef.current) {
+      paneClickRef.current = false;
+      return;
+    }
     if (selectedServiceId) {
       canvasMovedRef.current = true;
     }
   }
 
   function onPaneClick(): void {
+    paneClickRef.current = true;
+    canvasMovedRef.current = false;
     onSelectService(null);
     setContextMenu(null);
   }

@@ -10,18 +10,23 @@ import { useDeleteService } from "@/hooks/use-services";
 interface DangerZoneCardProps {
   serviceId: string;
   projectId: string;
+  environmentId: string;
 }
 
-export function DangerZoneCard({ serviceId, projectId }: DangerZoneCardProps) {
+export function DangerZoneCard({
+  serviceId,
+  projectId,
+  environmentId,
+}: DangerZoneCardProps) {
   const router = useRouter();
-  const deleteMutation = useDeleteService(projectId);
+  const deleteMutation = useDeleteService(environmentId);
 
   async function handleDelete() {
     if (!confirm("Delete this service? This cannot be undone.")) return;
     try {
       await deleteMutation.mutateAsync(serviceId);
       toast.success("Service deleted");
-      router.push(`/projects/${projectId}`);
+      router.push(`/projects/${projectId}/environments/${environmentId}`);
     } catch {
       toast.error("Failed to delete service");
     }

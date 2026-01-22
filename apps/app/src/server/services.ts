@@ -1,6 +1,6 @@
 import { ORPCError } from "@orpc/server";
 import { nanoid } from "nanoid";
-import { db } from "@/lib/db";
+import { addLatestDeployment, addLatestDeployments, db } from "@/lib/db";
 import { deployService } from "@/lib/deployer";
 import { stopContainer } from "@/lib/docker";
 import { createWildcardDomain, syncCaddyConfig } from "@/lib/domains";
@@ -22,37 +22,17 @@ export const services = {
       throw new ORPCError("NOT_FOUND", { message: "Service not found" });
     }
 
-    const latestDeployment = await db
-      .selectFrom("deployments")
-      .selectAll()
-      .where("serviceId", "=", input.id)
-      .orderBy("createdAt", "desc")
-      .limit(1)
-      .executeTakeFirst();
-
-    return { ...service, latestDeployment: latestDeployment ?? null };
+    return addLatestDeployment(service);
   }),
 
-  listByProject: os.services.listByProject.handler(async ({ input }) => {
+  list: os.services.list.handler(async ({ input }) => {
     const services = await db
       .selectFrom("services")
       .selectAll()
-      .where("projectId", "=", input.projectId)
+      .where("environmentId", "=", input.environmentId)
       .execute();
 
-    return Promise.all(
-      services.map(async (service) => {
-        const latestDeployment = await db
-          .selectFrom("deployments")
-          .selectAll()
-          .where("serviceId", "=", service.id)
-          .orderBy("createdAt", "desc")
-          .limit(1)
-          .executeTakeFirst();
-
-        return { ...service, latestDeployment: latestDeployment ?? null };
-      }),
-    );
+    return addLatestDeployments(services);
   }),
 
   create: os.services.create.handler(async ({ input }) => {
@@ -80,10 +60,20 @@ export const services = {
       }
     }
 
+    const environment = await db
+      .selectFrom("environments")
+      .selectAll()
+      .where("id", "=", input.environmentId)
+      .executeTakeFirst();
+
+    if (!environment) {
+      throw new ORPCError("NOT_FOUND", { message: "Environment not found" });
+    }
+
     const project = await db
       .selectFrom("projects")
       .select(["id", "name", "hostname"])
-      .where("id", "=", input.projectId)
+      .where("id", "=", environment.projectId)
       .executeTakeFirst();
 
     if (!project) {
@@ -93,13 +83,13 @@ export const services = {
     const existing = await db
       .selectFrom("services")
       .select("id")
-      .where("projectId", "=", input.projectId)
+      .where("environmentId", "=", input.environmentId)
       .where("name", "=", input.name)
       .executeTakeFirst();
 
     if (existing) {
       throw new ORPCError("CONFLICT", {
-        message: "Service with this name already exists in project",
+        message: "Service with this name already exists in environment",
       });
     }
 
@@ -116,7 +106,7 @@ export const services = {
         .insertInto("services")
         .values({
           id,
-          projectId: input.projectId,
+          environmentId: input.environmentId,
           name: input.name,
           hostname,
           deployType: "image",
@@ -128,7 +118,7 @@ export const services = {
           containerPort: serviceConfig.port,
           healthCheckPath: serviceConfig.healthCheckPath ?? null,
           healthCheckTimeout: serviceConfig.healthCheckTimeout,
-          autoDeploy: 0,
+          autoDeploy: false,
           serviceType: "database",
           volumes: JSON.stringify(serviceConfig.volumes),
           command: serviceConfig.command ?? null,
@@ -144,7 +134,7 @@ export const services = {
         .insertInto("services")
         .values({
           id,
-          projectId: input.projectId,
+          environmentId: input.environmentId,
           name: input.name,
           hostname,
           deployType: input.deployType,
@@ -159,7 +149,7 @@ export const services = {
           containerPort: input.containerPort ?? null,
           healthCheckPath: input.healthCheckPath ?? null,
           healthCheckTimeout: input.healthCheckTimeout ?? null,
-          autoDeploy: input.deployType === "repo" ? 1 : 0,
+          autoDeploy: input.deployType === "repo",
           memoryLimit: input.memoryLimit ?? null,
           cpuLimit: input.cpuLimit ?? null,
           shutdownTimeout: input.shutdownTimeout ?? null,
@@ -183,10 +173,16 @@ export const services = {
     }
 
     if (input.deployType !== "database") {
+      const envName =
+        environment.type !== "production"
+          ? slugify(environment.name)
+          : undefined;
       await createWildcardDomain(
         id,
+        input.environmentId,
         hostname,
         project.hostname ?? slugify(project.name),
+        envName,
       );
     }
 
@@ -230,7 +226,7 @@ export const services = {
     if (input.healthCheckTimeout !== undefined)
       updates.healthCheckTimeout = input.healthCheckTimeout;
     if (input.autoDeployEnabled !== undefined)
-      updates.autoDeploy = input.autoDeployEnabled ? 1 : 0;
+      updates.autoDeploy = input.autoDeployEnabled;
     if (input.memoryLimit !== undefined)
       updates.memoryLimit = input.memoryLimit;
     if (input.cpuLimit !== undefined) updates.cpuLimit = input.cpuLimit;
@@ -350,14 +346,12 @@ export const services = {
       path: string;
     }[];
 
-    const result = await Promise.all(
+    return Promise.all(
       volumeConfig.map(async (v) => {
         const dockerVolumeName = buildVolumeName(input.id, v.name);
         const sizeBytes = await getVolumeSize(dockerVolumeName);
         return { name: v.name, path: v.path, sizeBytes };
       }),
     );
-
-    return result;
   }),
 };

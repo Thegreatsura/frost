@@ -17,18 +17,21 @@ log "Testing autoDeploy default..."
 PROJECT=$(api -X POST "$BASE_URL/api/projects" -d '{"name":"e2e-webhook"}')
 PROJECT_ID=$(require_field "$PROJECT" '.id' "create project") || fail "Failed to create project: $PROJECT"
 
-SERVICE=$(api -X POST "$BASE_URL/api/projects/$PROJECT_ID/services" \
+ENV_ID=$(get_default_environment "$PROJECT_ID") || fail "Failed to get environment"
+log "Using environment: $ENV_ID"
+
+SERVICE=$(api -X POST "$BASE_URL/api/environments/$ENV_ID/services" \
   -d '{"name":"webhook-test","repoUrl":"https://github.com/test/repo.git"}')
 SERVICE_ID=$(require_field "$SERVICE" '.id' "create service") || fail "Failed to create service: $SERVICE"
 AUTO_DEPLOY=$(json_get "$SERVICE" '.autoDeploy')
-[ "$AUTO_DEPLOY" != "1" ] && fail "autoDeploy should be 1, got: $AUTO_DEPLOY"
+[ "$AUTO_DEPLOY" != "1" ] && [ "$AUTO_DEPLOY" != "true" ] && fail "autoDeploy should be 1/true, got: $AUTO_DEPLOY"
 log "autoDeploy enabled by default"
 
 log "Testing autoDeploy toggle..."
 api -X PATCH "$BASE_URL/api/services/$SERVICE_ID" -d '{"autoDeployEnabled":false}' > /dev/null
 SERVICE_UPDATED=$(api "$BASE_URL/api/services/$SERVICE_ID")
 AUTO_DEPLOY_OFF=$(json_get "$SERVICE_UPDATED" '.autoDeploy')
-[ "$AUTO_DEPLOY_OFF" != "0" ] && fail "autoDeploy should be 0, got: $AUTO_DEPLOY_OFF"
+[ "$AUTO_DEPLOY_OFF" != "0" ] && [ "$AUTO_DEPLOY_OFF" != "false" ] && fail "autoDeploy should be 0/false, got: $AUTO_DEPLOY_OFF"
 log "autoDeploy toggle works"
 
 api -X DELETE "$BASE_URL/api/projects/$PROJECT_ID" > /dev/null
@@ -52,7 +55,10 @@ SETTING_CHECK=$(remote "sqlite3 /opt/frost/data/frost.db \"SELECT COUNT(*) FROM 
 PROJECT2=$(api -X POST "$BASE_URL/api/projects" -d '{"name":"e2e-webhook-deploy"}')
 PROJECT2_ID=$(require_field "$PROJECT2" '.id' "create project2") || fail "Failed to create project2: $PROJECT2"
 
-SERVICE2=$(api -X POST "$BASE_URL/api/projects/$PROJECT2_ID/services" \
+ENV2_ID=$(get_default_environment "$PROJECT2_ID") || fail "Failed to get environment"
+log "Using environment: $ENV2_ID"
+
+SERVICE2=$(api -X POST "$BASE_URL/api/environments/$ENV2_ID/services" \
   -d "{\"name\":\"webhook-deploy-test\",\"repoUrl\":\"https://github.com/elitan/frost.git\",\"branch\":\"$TEST_BRANCH\",\"dockerfilePath\":\"apps/app/test/fixtures/simple-node/Dockerfile.repo\"}")
 SERVICE2_ID=$(require_field "$SERVICE2" '.id' "create service2") || fail "Failed to create service2: $SERVICE2"
 log "Created service: $SERVICE2_ID"

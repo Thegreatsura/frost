@@ -1,11 +1,11 @@
 import { oc } from "@orpc/contract";
 import { z } from "zod";
 import { deploymentsSchema, servicesSchema } from "@/lib/db-schemas";
-import { envVarSchema, volumeConfigSchema } from "./shared";
-
-const serviceWithDeploymentSchema = servicesSchema.extend({
-  latestDeployment: deploymentsSchema.nullable(),
-});
+import {
+  envVarSchema,
+  serviceWithDeploymentSchema,
+  volumeConfigSchema,
+} from "./shared";
 
 const volumeInfoSchema = z.object({
   name: z.string(),
@@ -19,16 +19,16 @@ export const servicesContract = {
     .input(z.object({ id: z.string() }))
     .output(serviceWithDeploymentSchema),
 
-  listByProject: oc
-    .route({ method: "GET", path: "/projects/{projectId}/services" })
-    .input(z.object({ projectId: z.string() }))
+  list: oc
+    .route({ method: "GET", path: "/environments/{environmentId}/services" })
+    .input(z.object({ environmentId: z.string() }))
     .output(z.array(serviceWithDeploymentSchema)),
 
   create: oc
-    .route({ method: "POST", path: "/projects/{projectId}/services" })
+    .route({ method: "POST", path: "/environments/{environmentId}/services" })
     .input(
       z.object({
-        projectId: z.string(),
+        environmentId: z.string(),
         name: z.string().min(1),
         deployType: z.enum(["repo", "image", "database"]).default("repo"),
         repoUrl: z.string().optional(),

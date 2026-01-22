@@ -78,29 +78,29 @@ export async function hasGitHubApp(): Promise<boolean> {
 }
 
 export async function getInstallations(): Promise<GitHubInstallation[]> {
-  const rows = await db
+  return db
     .selectFrom("githubInstallations")
     .selectAll()
     .orderBy("createdAt", "desc")
     .execute();
-  return rows;
 }
 
 export async function getInstallationByAccount(
   accountLogin: string,
 ): Promise<GitHubInstallation | null> {
-  const row = await db
-    .selectFrom("githubInstallations")
-    .selectAll()
-    .where("accountLogin", "=", accountLogin)
-    .executeTakeFirst();
-  return row ?? null;
+  return (
+    (await db
+      .selectFrom("githubInstallations")
+      .selectAll()
+      .where("accountLogin", "=", accountLogin)
+      .executeTakeFirst()) ?? null
+  );
 }
 
 export async function saveInstallation(installation: {
   installationId: string;
   accountLogin: string;
-  accountType: string;
+  accountType: "User" | "Organization";
 }): Promise<void> {
   const existing = await db
     .selectFrom("githubInstallations")
@@ -183,7 +183,7 @@ export async function clearGitHubAppCredentials(): Promise<void> {
 
 export async function fetchInstallationInfo(installationId: string): Promise<{
   accountLogin: string;
-  accountType: string;
+  accountType: "User" | "Organization";
 }> {
   const creds = await getGitHubAppCredentials();
   if (!creds) {
@@ -233,9 +233,7 @@ function createJWT(appId: string, privateKeyPem: string): string {
 }
 
 export function extractAccountFromRepoUrl(repoUrl: string): string | null {
-  const match =
-    repoUrl.match(/github\.com\/([^/]+)\//) ||
-    repoUrl.match(/git@github\.com:([^/]+)\//);
+  const match = repoUrl.match(/(?:github\.com\/|git@github\.com:)([^/]+)\//);
   return match?.[1] ?? null;
 }
 
@@ -387,8 +385,9 @@ export function buildManifest(domain: string): object {
       contents: "read",
       metadata: "read",
       statuses: "write",
+      pull_requests: "write",
     },
-    default_events: ["push"],
+    default_events: ["push", "pull_request", "delete"],
   };
 }
 
@@ -490,4 +489,121 @@ export async function listInstallationRepos(): Promise<{
     owners: Array.from(ownerMap.values()),
     repos,
   };
+}
+
+export async function createPRComment(
+  repoUrl: string,
+  prNumber: number,
+  body: string,
+): Promise<number> {
+  const parsed = parseOwnerRepoFromUrl(repoUrl);
+  if (!parsed) {
+    throw new Error("Invalid GitHub repo URL");
+  }
+
+  const token = await generateInstallationToken(repoUrl);
+  const { owner, repo } = parsed;
+
+  const res = await fetch(
+    `${GITHUB_API}/repos/${owner}/${repo}/issues/${prNumber}/comments`,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${token}`,
+        "X-GitHub-Api-Version": "2022-11-28",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ body }),
+    },
+  );
+
+  if (!res.ok) {
+    const error = await res.text();
+    throw new Error(`Failed to create PR comment: ${error}`);
+  }
+
+  const data = await res.json();
+  return data.id;
+}
+
+export async function updatePRComment(
+  repoUrl: string,
+  commentId: number,
+  body: string,
+): Promise<void> {
+  const parsed = parseOwnerRepoFromUrl(repoUrl);
+  if (!parsed) {
+    throw new Error("Invalid GitHub repo URL");
+  }
+
+  const token = await generateInstallationToken(repoUrl);
+  const { owner, repo } = parsed;
+
+  const res = await fetch(
+    `${GITHUB_API}/repos/${owner}/${repo}/issues/comments/${commentId}`,
+    {
+      method: "PATCH",
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${token}`,
+        "X-GitHub-Api-Version": "2022-11-28",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ body }),
+    },
+  );
+
+  if (!res.ok) {
+    const error = await res.text();
+    throw new Error(`Failed to update PR comment: ${error}`);
+  }
+}
+
+export interface GitHubPullRequest {
+  number: number;
+  state: "open" | "closed";
+  head: {
+    ref: string;
+    sha: string;
+  };
+}
+
+export async function findOpenPRsForBranch(
+  repoUrl: string,
+  branch: string,
+): Promise<GitHubPullRequest[]> {
+  const parsed = parseOwnerRepoFromUrl(repoUrl);
+  if (!parsed) {
+    throw new Error("Invalid GitHub repo URL");
+  }
+
+  const token = await generateInstallationToken(repoUrl);
+  const { owner, repo } = parsed;
+
+  const res = await fetch(
+    `${GITHUB_API}/repos/${owner}/${repo}/pulls?state=open&head=${owner}:${branch}`,
+    {
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${token}`,
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+    },
+  );
+
+  if (!res.ok) {
+    const error = await res.text();
+    throw new Error(`Failed to find PRs for branch: ${error}`);
+  }
+
+  const data = await res.json();
+  return data.map((pr: any) => ({
+    number: pr.number,
+    state: pr.state,
+    head: {
+      ref: pr.head.ref,
+      sha: pr.head.sha,
+    },
+  }));
 }

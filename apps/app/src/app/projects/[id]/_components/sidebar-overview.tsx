@@ -22,6 +22,7 @@ import { useDeployments, useDeployService } from "@/hooks/use-services";
 import type { EnvVar, Service } from "@/lib/api";
 import { api } from "@/lib/api";
 import { buildConnectionString } from "@/lib/connection-strings";
+import { getCurrentDeployment } from "@/lib/deployment-utils";
 import { getPreferredDomain } from "@/lib/service-url";
 import { getTimeAgo } from "@/lib/time";
 import { ServiceMetricsCard } from "../services/[serviceId]/_components/service-metrics-card";
@@ -34,13 +35,12 @@ function getGitHubRepoFromUrl(url: string | null): string | null {
 
 interface SidebarOverviewProps {
   service: Service;
-  projectId: string;
   onDeploy: () => void;
 }
 
-export function SidebarOverview({ service, projectId }: SidebarOverviewProps) {
+export function SidebarOverview({ service }: SidebarOverviewProps) {
   const queryClient = useQueryClient();
-  const deployMutation = useDeployService(service.id, projectId);
+  const deployMutation = useDeployService(service.id, service.environmentId);
 
   const { data: settings } = useQuery({
     queryKey: ["settings"],
@@ -52,8 +52,7 @@ export function SidebarOverview({ service, projectId }: SidebarOverviewProps) {
   const preferredDomain = getPreferredDomain(domains);
 
   const { data: deployments = [] } = useDeployments(service.id);
-  const currentDeployment =
-    deployments.find((d) => d.id === service.currentDeploymentId) ?? null;
+  const currentDeployment = getCurrentDeployment(service, deployments);
 
   const { data: tcpProxy } = useQuery({
     queryKey: ["tcp-proxy", service.id],
