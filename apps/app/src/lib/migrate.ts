@@ -1,8 +1,20 @@
 import { Database } from "bun:sqlite";
+import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { nanoid } from "nanoid";
 import { getDbPath } from "./paths";
+
+const alphabet =
+  "useandom-26T198340PX75pxJACKVERYMINDBUSHWOLF_GQZbfghjklqvwyzrict";
+
+function generateId(size = 21): string {
+  const bytes = randomBytes(size);
+  let id = "";
+  for (let i = 0; i < size; i++) {
+    id += alphabet[bytes[i] & 63];
+  }
+  return id;
+}
 
 export interface MigrationResult {
   applied: number;
@@ -186,7 +198,7 @@ function runSchemaUpgrades(sqlite: Database): string[] {
       `);
 
       for (const project of projects) {
-        const envId = nanoid();
+        const envId = generateId();
         insertEnv.run(envId, project.id, project.created_at);
       }
 
