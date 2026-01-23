@@ -6,17 +6,59 @@ API_KEY=$2
 PROJECT_ID=$3
 SERVICE_ID=$4
 DEPLOYMENT_ID=$5
-BASE_URL="http://$SERVER_IP"
+BASE_URL="http://$SERVER_IP:3000"
 
 if [ -z "$SERVER_IP" ] || [ -z "$API_KEY" ] || [ -z "$PROJECT_ID" ] || [ -z "$SERVICE_ID" ] || [ -z "$DEPLOYMENT_ID" ]; then
   echo "Usage: $0 <server-ip> <api-key> <project-id> <service-id> <deployment-id>"
   exit 1
 fi
 
+error_handler() {
+  echo ""
+  echo "!!! ERROR at line $1 !!!"
+  echo "Last command exited with status $2"
+  echo ""
+  echo "=== Debug: Frost health ==="
+  curl -sS --max-time 5 "$BASE_URL/api/health" 2>&1 || echo "(health check failed)"
+  echo ""
+  echo "=== Debug: Recent Frost logs ==="
+  ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 root@$SERVER_IP "journalctl -u frost --no-pager -n 30" 2>&1 || echo "(failed to get logs)"
+}
+trap 'error_handler $LINENO $?' ERR
+
 echo "Verifying pre-upgrade data survived on $BASE_URL"
+echo "  PROJECT_ID=$PROJECT_ID"
+echo "  SERVICE_ID=$SERVICE_ID"
+echo "  DEPLOYMENT_ID=$DEPLOYMENT_ID"
 
 api() {
-  curl -sS --max-time 30 -H "X-Frost-Token: $API_KEY" -H "Content-Type: application/json" "$@"
+  local RESPONSE
+  local HTTP_CODE
+  local CURL_EXIT
+
+  RESPONSE=$(curl -sS --max-time 30 -w "\n%{http_code}" -H "X-Frost-Token: $API_KEY" -H "Content-Type: application/json" "$@" 2>&1) || CURL_EXIT=$?
+
+  if [ -n "$CURL_EXIT" ]; then
+    echo "CURL FAILED (exit $CURL_EXIT):" >&2
+    echo "$RESPONSE" >&2
+    return 1
+  fi
+
+  HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+  RESPONSE=$(echo "$RESPONSE" | sed '$d')
+
+  if ! [[ "$HTTP_CODE" =~ ^[0-9]+$ ]]; then
+    echo "INVALID HTTP CODE: '$HTTP_CODE'" >&2
+    echo "Response: $RESPONSE" >&2
+    return 1
+  fi
+
+  if [ "$HTTP_CODE" -ge 400 ]; then
+    echo "API ERROR (HTTP $HTTP_CODE):" >&2
+    echo "$RESPONSE" | jq . 2>/dev/null || echo "$RESPONSE" >&2
+    return 1
+  fi
+  echo "$RESPONSE"
 }
 
 FAILED=0
