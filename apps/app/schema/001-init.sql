@@ -16,7 +16,6 @@ CREATE TABLE environments (
   type TEXT NOT NULL DEFAULT 'manual' CHECK (type IN ('production', 'preview', 'manual')),
   pr_number INTEGER,
   pr_branch TEXT,
-  pr_comment_id INTEGER,
   is_ephemeral INTEGER DEFAULT 0 CHECK (is_ephemeral IN (0, 1)),
   created_at INTEGER NOT NULL,
   UNIQUE(project_id, name)
