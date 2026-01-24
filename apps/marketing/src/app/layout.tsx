@@ -2,12 +2,29 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Header } from "@/components/header";
 
+const title = "Frost - Deploy Docker apps. Simply.";
+const description =
+  "Open source Railway alternative. One server, one command. Deploy Docker apps with git push and automatic SSL.";
+const url = "https://frost.build";
+
 export const metadata: Metadata = {
-  title: "Frost - Deploy Docker apps. Simply.",
-  description:
-    "Open source Railway alternative. One server, one command. Deploy Docker apps with git push and automatic SSL.",
+  title,
+  description,
   icons: {
     icon: "/favicon.svg",
+  },
+  metadataBase: new URL(url),
+  openGraph: {
+    title,
+    description,
+    url,
+    siteName: "Frost",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title,
+    description,
   },
 };
 
