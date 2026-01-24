@@ -348,9 +348,9 @@ function buildCaddyConfig(
 
   const policies: unknown[] = [];
 
-  if (wildcardConfig && wildcardDomains.length > 0) {
+  if (wildcardConfig) {
     policies.push({
-      subjects: [`*.${wildcardConfig.domain}`, ...wildcardDomains],
+      subjects: [`*.${wildcardConfig.domain}`],
       issuers: [dnsAcmeIssuer(email, wildcardConfig.dnsConfig, staging)],
     });
   }
@@ -359,6 +359,19 @@ function buildCaddyConfig(
     policies.push({
       subjects: httpOnlyDomains,
       issuers: [acmeIssuer(email, staging)],
+    });
+  }
+
+  if (wildcardConfig) {
+    httpsRoutes.push({
+      match: [{ host: [`*.${wildcardConfig.domain}`] }],
+      handle: [
+        {
+          handler: "static_response",
+          status_code: 404,
+          body: "Service not found",
+        },
+      ],
     });
   }
 
