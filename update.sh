@@ -202,6 +202,9 @@ if [ "$GIT_MODE" = true ]; then
     rm -rf node_modules apps/*/node_modules
     log "Creating .env symlink for monorepo..."
     ln -sf "$FROST_DIR/.env" "$FROST_DIR/apps/app/.env"
+    log "Updating systemd service for git mode..."
+    sed -i 's|ExecStart=.*|ExecStart=/usr/local/bin/bun run start|' /etc/systemd/system/frost.service
+    systemctl daemon-reload
   fi
 
   log "Installing dependencies..."
