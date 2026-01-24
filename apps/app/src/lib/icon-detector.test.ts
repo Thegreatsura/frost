@@ -297,13 +297,21 @@ describe("detectIcon", () => {
         join(TEST_DIR, "apps", "web", "package.json"),
         JSON.stringify({ dependencies: { next: "14.0.0" } }),
       );
-      writeFileSync(join(TEST_DIR, "apps", "web", "Dockerfile"), "FROM node:20\n");
-      expect(await detectIcon(TEST_DIR, "apps/web/Dockerfile")).toBe("nextdotjs");
+      writeFileSync(
+        join(TEST_DIR, "apps", "web", "Dockerfile"),
+        "FROM node:20\n",
+      );
+      expect(await detectIcon(TEST_DIR, "apps/web/Dockerfile")).toBe(
+        "nextdotjs",
+      );
     });
 
     test("falls back to Dockerfile when no package.json in subdir", async () => {
       mkdirSync(join(TEST_DIR, "apps", "api"), { recursive: true });
-      writeFileSync(join(TEST_DIR, "apps", "api", "Dockerfile"), "FROM python:3.12\n");
+      writeFileSync(
+        join(TEST_DIR, "apps", "api", "Dockerfile"),
+        "FROM python:3.12\n",
+      );
       expect(await detectIcon(TEST_DIR, "apps/api/Dockerfile")).toBe("python");
     });
   });
