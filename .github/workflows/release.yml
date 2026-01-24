@@ -179,7 +179,7 @@ jobs:
           cd frost-release/node_modules
           for pkg in .bun/node_modules/*; do
             name=$(basename "$pkg")
-            [ -e "$name" ] || ln -s ".bun/node_modules/$name" "$name"
+            [ -e "$name" ] || [ -L "$name" ] || ln -s ".bun/node_modules/$name" "$name"
           done
           cd ../..
           # Handle scoped packages (@next, @swc, etc.)
@@ -189,7 +189,7 @@ jobs:
             mkdir -p "frost-release/node_modules/$scope_name"
             for pkg in "$scope"/*; do
               name=$(basename "$pkg")
-              [ -e "frost-release/node_modules/$scope_name/$name" ] || \
+              [ -e "frost-release/node_modules/$scope_name/$name" ] || [ -L "frost-release/node_modules/$scope_name/$name" ] || \
                 ln -s "../.bun/node_modules/$scope_name/$name" "frost-release/node_modules/$scope_name/$name"
             done
           done
