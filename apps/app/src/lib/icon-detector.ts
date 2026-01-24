@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 const IMAGE_PATTERNS: Array<{ pattern: string; icon: string }> = [
   { pattern: "next", icon: "nextdotjs" },
@@ -79,8 +79,12 @@ function detectFromPackageJson(content: object): string | null {
   return "nodedotjs";
 }
 
-export async function detectIcon(repoPath: string): Promise<string | null> {
-  const packageJsonPath = join(repoPath, "package.json");
+export async function detectIcon(
+  repoPath: string,
+  dockerfilePath = "Dockerfile",
+): Promise<string | null> {
+  const dockerfileDir = dirname(join(repoPath, dockerfilePath));
+  const packageJsonPath = join(dockerfileDir, "package.json");
   if (existsSync(packageJsonPath)) {
     try {
       const content = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
@@ -89,10 +93,10 @@ export async function detectIcon(repoPath: string): Promise<string | null> {
     } catch {}
   }
 
-  const dockerfilePath = join(repoPath, "Dockerfile");
-  if (existsSync(dockerfilePath)) {
+  const fullDockerfilePath = join(repoPath, dockerfilePath);
+  if (existsSync(fullDockerfilePath)) {
     try {
-      const content = readFileSync(dockerfilePath, "utf-8");
+      const content = readFileSync(fullDockerfilePath, "utf-8");
       const detected = detectFromDockerfile(content);
       if (detected) return detected;
     } catch {}
