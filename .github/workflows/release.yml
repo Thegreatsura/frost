@@ -173,6 +173,12 @@ jobs:
           mkdir -p frost-release
           # Copy standalone output (monorepo structure: apps/app/.next/standalone/apps/app/)
           cp -r $STANDALONE_APP/. frost-release/
+          # Debug: check standalone node_modules structure
+          echo "=== Debug: standalone node_modules ==="
+          ls -la apps/app/.next/standalone/node_modules/ | head -20
+          echo "=== Debug: checking for next in standalone ==="
+          ls -la apps/app/.next/standalone/node_modules/next 2>&1 || echo "next not at top level"
+          ls -la apps/app/.next/standalone/node_modules/.bun/node_modules/next 2>&1 || echo "next not in .bun"
           # Copy node_modules with -L to dereference symlinks (Bun uses complex symlink structure)
           cp -rL apps/app/.next/standalone/node_modules frost-release/
           # Copy static files
@@ -195,6 +201,12 @@ jobs:
           mkdir -p /tmp/frost-test
           tar -xzf "frost-v${VERSION}.tar.gz" -C /tmp/frost-test
           cd /tmp/frost-test
+
+          echo "=== Debug: node_modules contents ==="
+          ls -la node_modules/ | head -20
+          echo "=== Debug: checking for next ==="
+          ls -la node_modules/next 2>&1 || echo "next not found at top level"
+          ls -la node_modules/.bun/node_modules/next 2>&1 || echo "next not in .bun/node_modules"
 
           mkdir -p data
           bun run migrate
