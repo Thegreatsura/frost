@@ -173,26 +173,8 @@ jobs:
           mkdir -p frost-release
           # Copy standalone output (monorepo structure: apps/app/.next/standalone/apps/app/)
           cp -r $STANDALONE_APP/. frost-release/
-          cp -r apps/app/.next/standalone/node_modules frost-release/
-          # Bun creates symlinks inside .bun/node_modules/ but server.js needs them at top level
-          # Create top-level symlinks for packages that server.js requires
-          cd frost-release/node_modules
-          for pkg in .bun/node_modules/*; do
-            name=$(basename "$pkg")
-            [ -e "$name" ] || [ -L "$name" ] || ln -s ".bun/node_modules/$name" "$name"
-          done
-          cd ../..
-          # Handle scoped packages (@next, @swc, etc.)
-          for scope in frost-release/node_modules/.bun/node_modules/@*; do
-            [ -d "$scope" ] || continue
-            scope_name=$(basename "$scope")
-            mkdir -p "frost-release/node_modules/$scope_name"
-            for pkg in "$scope"/*; do
-              name=$(basename "$pkg")
-              [ -e "frost-release/node_modules/$scope_name/$name" ] || [ -L "frost-release/node_modules/$scope_name/$name" ] || \
-                ln -s "../.bun/node_modules/$scope_name/$name" "frost-release/node_modules/$scope_name/$name"
-            done
-          done
+          # Copy node_modules with -L to dereference symlinks (Bun uses complex symlink structure)
+          cp -rL apps/app/.next/standalone/node_modules frost-release/
           # Copy static files
           mkdir -p frost-release/.next
           cp -r apps/app/.next/static frost-release/.next/static
