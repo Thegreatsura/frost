@@ -173,14 +173,30 @@ jobs:
           mkdir -p frost-release
           # Copy standalone output (monorepo structure: apps/app/.next/standalone/apps/app/)
           cp -r $STANDALONE_APP/. frost-release/
-          # Debug: check standalone node_modules structure
-          echo "=== Debug: standalone node_modules ==="
-          ls -la apps/app/.next/standalone/node_modules/ | head -20
-          echo "=== Debug: checking for next in standalone ==="
-          ls -la apps/app/.next/standalone/node_modules/next 2>&1 || echo "next not at top level"
-          ls -la apps/app/.next/standalone/node_modules/.bun/node_modules/next 2>&1 || echo "next not in .bun"
-          # Copy node_modules with -L to dereference symlinks (Bun uses complex symlink structure)
-          cp -rL apps/app/.next/standalone/node_modules frost-release/
+          # Copy node_modules, then fix broken symlinks by copying actual packages
+          cp -r apps/app/.next/standalone/node_modules frost-release/
+          # Remove broken top-level symlinks and copy dereferenced packages from .bun
+          cd frost-release/node_modules
+          for pkg in .bun/node_modules/*; do
+            [ -d "$pkg" ] || continue
+            name=$(basename "$pkg")
+            [[ "$name" == @* ]] && continue
+            rm -f "$name"
+            cp -rL "$pkg" "$name"
+          done
+          # Handle scoped packages
+          for scope in .bun/node_modules/@*; do
+            [ -d "$scope" ] || continue
+            scope_name=$(basename "$scope")
+            mkdir -p "$scope_name"
+            for pkg in "$scope"/*; do
+              [ -d "$pkg" ] || continue
+              name=$(basename "$pkg")
+              rm -f "$scope_name/$name"
+              cp -rL "$pkg" "$scope_name/$name"
+            done
+          done
+          cd ../..
           # Copy static files
           mkdir -p frost-release/.next
           cp -r apps/app/.next/static frost-release/.next/static
@@ -201,12 +217,6 @@ jobs:
           mkdir -p /tmp/frost-test
           tar -xzf "frost-v${VERSION}.tar.gz" -C /tmp/frost-test
           cd /tmp/frost-test
-
-          echo "=== Debug: node_modules contents ==="
-          ls -la node_modules/ | head -20
-          echo "=== Debug: checking for next ==="
-          ls -la node_modules/next 2>&1 || echo "next not found at top level"
-          ls -la node_modules/.bun/node_modules/next 2>&1 || echo "next not in .bun/node_modules"
 
           mkdir -p data
           bun run migrate
