@@ -110,6 +110,16 @@ Types in `src/lib/db-types.ts` are auto-generated. Never modify manually.
 
 **CamelCasePlugin**: Kysely uses CamelCasePlugin to auto-convert between camelCase (TypeScript) and snake_case (database). In TypeScript code, use camelCase (`projectId`, `createdAt`). Raw SQL queries must use snake_case (`project_id`, `created_at`).
 
+### Migrations
+
+Schema changes require a new migration file in `schema/`:
+1. Create `schema/NNN-description.sql` (next number in sequence)
+2. Add the SQL (e.g., `ALTER TABLE x ADD COLUMN y TEXT;`)
+3. Run `bun run db:gen` to regenerate types
+4. Commit both the migration and updated db-types.ts
+
+**Never modify `001-init.sql`** for schema changes - it's only for fresh installs. Existing databases get updates via numbered migrations.
+
 ## Deploy flow
 1. Clone repo (repo type) or pull image (image type)
 2. Docker build with merged env vars (project + service)
