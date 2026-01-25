@@ -347,7 +347,7 @@ export function buildPRCommentBody(params: BuildPRCommentParams): string {
     .map((s) => {
       const statusBadge = getStatusBadge(s.status, frostDomain);
       const serviceLink = frostDomain
-        ? `[${s.name}](https://${frostDomain}/projects/${projectId}/environments/${environmentId}/services/${s.id})`
+        ? `[${s.name}](https://${frostDomain}/projects/${projectId}/environments/${environmentId}?service=${s.id})`
         : s.name;
       const preview = s.url ? `[Visit](${s.url})` : "-";
       return `| ${serviceLink} | ${statusBadge} | ${preview} |`;
