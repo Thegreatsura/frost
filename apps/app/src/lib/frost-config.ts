@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Selectable } from "kysely";
-import { parse } from "yaml";
+import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 import type { Services } from "./db-types";
 
@@ -28,6 +28,11 @@ export const frostConfigSchema = z
   .strict();
 
 export type FrostConfig = z.infer<typeof frostConfigSchema>;
+
+export function parseFrostConfig(content: string): FrostConfig {
+  const parsed = parseYaml(content);
+  return frostConfigSchema.parse(parsed);
+}
 
 export type FrostConfigResult =
   | {
@@ -77,7 +82,7 @@ export function loadFrostConfig(
 
   let parsed: unknown;
   try {
-    parsed = parse(content);
+    parsed = parseYaml(content);
   } catch (err: any) {
     return { found: true, error: `Invalid YAML: ${err.message}` };
   }
