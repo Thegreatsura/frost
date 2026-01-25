@@ -1,12 +1,14 @@
 "use client";
 
 import { useMutation } from "@tanstack/react-query";
+import { Loader2, RotateCw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/empty-state";
 import { StatusDot } from "@/components/status-dot";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useDeployments } from "@/hooks/use-services";
+import { useDeployments, useDeployService } from "@/hooks/use-services";
 import type { Deployment, Service } from "@/lib/api";
 import { orpc } from "@/lib/orpc-client";
 import { DeploymentRow } from "../services/[serviceId]/_components/deployment-row";
@@ -17,6 +19,7 @@ interface SidebarDeploymentsProps {
 
 export function SidebarDeployments({ service }: SidebarDeploymentsProps) {
   const { data: deployments = [] } = useDeployments(service.id);
+  const deployMutation = useDeployService(service.id, service.environmentId);
 
   const [selectedDeployment, setSelectedDeployment] =
     useState<Deployment | null>(null);
@@ -58,8 +61,30 @@ export function SidebarDeployments({ service }: SidebarDeploymentsProps) {
     <div className="space-y-4 ">
       <Card className="bg-neutral-800 border-neutral-700">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-neutral-300">
-            Deployments
+          <CardTitle className="flex items-center justify-between text-sm font-medium text-neutral-300">
+            <span>Deployments</span>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                deployMutation.mutateAsync().then(() => {
+                  toast.success("Deployment started");
+                });
+              }}
+              disabled={deployMutation.isPending}
+            >
+              {deployMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  Deploying
+                </>
+              ) : (
+                <>
+                  <RotateCw className="mr-1.5 h-3.5 w-3.5" />
+                  Redeploy
+                </>
+              )}
+            </Button>
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
