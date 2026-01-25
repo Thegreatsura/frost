@@ -223,9 +223,28 @@ async function updateCommitStatusIfGitHub(
 
   try {
     const frostDomain = await getSetting("domain");
-    const targetUrl = frostDomain
-      ? `https://${frostDomain}/deployments/${deploymentId}`
-      : undefined;
+    let targetUrl: string | undefined;
+
+    if (frostDomain) {
+      const deployment = await db
+        .selectFrom("deployments")
+        .innerJoin(
+          "environments",
+          "environments.id",
+          "deployments.environmentId",
+        )
+        .select([
+          "deployments.serviceId",
+          "deployments.environmentId",
+          "environments.projectId",
+        ])
+        .where("deployments.id", "=", deploymentId)
+        .executeTakeFirst();
+
+      if (deployment) {
+        targetUrl = `https://${frostDomain}/projects/${deployment.projectId}/environments/${deployment.environmentId}?service=${deployment.serviceId}`;
+      }
+    }
 
     await createCommitStatus({
       repoUrl,
