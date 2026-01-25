@@ -83,7 +83,7 @@ export default function Home() {
           <Button asChild>
             <Link href="/projects/new">
               <Plus className="mr-1.5 h-4 w-4" />
-              Add New...
+              New
             </Link>
           </Button>
         </div>
