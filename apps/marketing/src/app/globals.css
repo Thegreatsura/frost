@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 @font-face {
   font-family: "Geist";
@@ -46,19 +47,19 @@
 }
 
 :root {
-  --color-accent-rgb: 249, 115, 22;
+  --color-accent-rgb: 255, 255, 255;
 }
 
 @theme {
-  --color-background: #050508;
+  --color-background: #0a0a0a;
   --color-foreground: #fafafa;
-  --color-card: #0d0d12;
-  --color-card-hover: #12121a;
-  --color-border: #1e1e2a;
-  --color-border-subtle: #14141c;
-  --color-muted-foreground: #71717a;
-  --color-muted: #52525b;
-  --color-accent: #f97316;
+  --color-card: #171717;
+  --color-card-hover: #1f1f1f;
+  --color-border: #262626;
+  --color-border-subtle: #171717;
+  --color-muted-foreground: #a3a3a3;
+  --color-muted: #737373;
+  --color-accent: #ffffff;
 }
 
 body {
@@ -155,8 +156,9 @@ body {
 
 .animated-border {
   position: relative;
-  background: var(--color-card);
+  background: #141414;
   border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .animated-border::before {
@@ -167,19 +169,25 @@ body {
   padding: 1px;
   background: linear-gradient(
     var(--angle),
-    transparent 40%,
-    var(--color-accent) 50%,
-    transparent 60%
+    transparent 30%,
+    rgba(255, 255, 255, 0.4) 50%,
+    transparent 70%
   );
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   mask-composite: exclude;
-  animation: border-spin 4s linear infinite;
+  -webkit-mask-composite: xor;
+  animation: border-spin 3.6s linear infinite;
   opacity: 0;
   transition: opacity 0.3s ease;
+  pointer-events: none;
 }
 
 .animated-border:hover::before {
   opacity: 1;
+}
+
+.animated-border:hover {
+  border-color: transparent;
 }
 
 @keyframes scan-line {
