@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import type { Selectable } from "kysely";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
@@ -115,17 +115,10 @@ type EffectiveService = Pick<
 export function mergeConfigWithService<T extends EffectiveService>(
   service: T,
   config: FrostConfig,
-  frostFilePath?: string,
 ): T {
-  let dockerfilePath = service.dockerfilePath;
-  if (config.dockerfile) {
-    const dir = frostFilePath ? dirname(frostFilePath) : ".";
-    dockerfilePath = dir === "." ? config.dockerfile : `${dir}/${config.dockerfile}`;
-  }
-
   return {
     ...service,
-    dockerfilePath,
+    dockerfilePath: config.dockerfile ?? service.dockerfilePath,
     containerPort: config.port ?? service.containerPort,
     healthCheckPath: config.health_check?.path ?? service.healthCheckPath,
     healthCheckTimeout:

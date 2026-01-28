@@ -136,31 +136,34 @@ describe("mergeConfigWithService", () => {
     expect(result.containerPort).toBe(3000);
   });
 
-  test("frost.yaml at repo root resolves dockerfile as-is", () => {
+  test("config.dockerfile used as-is (repo-root-relative)", () => {
     const service = makeService();
-    const config: FrostConfig = { dockerfile: "build/Dockerfile.prod" };
-    const result = mergeConfigWithService(service, config, "frost.yaml");
-    expect(result.dockerfilePath).toBe("build/Dockerfile.prod");
-  });
-
-  test("frost.yaml in subdirectory prepends directory to dockerfile", () => {
-    const service = makeService();
-    const config: FrostConfig = { dockerfile: "Dockerfile" };
-    const result = mergeConfigWithService(service, config, "apps/web/frost.yaml");
+    const config: FrostConfig = { dockerfile: "apps/web/Dockerfile" };
+    const result = mergeConfigWithService(service, config);
     expect(result.dockerfilePath).toBe("apps/web/Dockerfile");
   });
 
-  test("frost.yaml in subdirectory with custom dockerfile name", () => {
-    const service = makeService();
-    const config: FrostConfig = { dockerfile: "Dockerfile.prod" };
-    const result = mergeConfigWithService(service, config, "services/api/frost.yaml");
-    expect(result.dockerfilePath).toBe("services/api/Dockerfile.prod");
+  test("config.dockerfile overrides service dockerfilePath", () => {
+    const service = makeService({ dockerfilePath: "old/Dockerfile" });
+    const config: FrostConfig = { dockerfile: "new/Dockerfile.prod" };
+    const result = mergeConfigWithService(service, config);
+    expect(result.dockerfilePath).toBe("new/Dockerfile.prod");
   });
 
-  test("no frostFilePath defaults to root directory", () => {
+  test("merges all config fields", () => {
     const service = makeService();
-    const config: FrostConfig = { dockerfile: "Dockerfile" };
+    const config: FrostConfig = {
+      dockerfile: "Dockerfile.prod",
+      port: 3000,
+      health_check: { path: "/health", timeout: 60 },
+      resources: { memory: "1g", cpu: 2 },
+    };
     const result = mergeConfigWithService(service, config);
-    expect(result.dockerfilePath).toBe("Dockerfile");
+    expect(result.dockerfilePath).toBe("Dockerfile.prod");
+    expect(result.containerPort).toBe(3000);
+    expect(result.healthCheckPath).toBe("/health");
+    expect(result.healthCheckTimeout).toBe(60);
+    expect(result.memoryLimit).toBe("1g");
+    expect(result.cpuLimit).toBe(2);
   });
 });

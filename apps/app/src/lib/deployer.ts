@@ -541,7 +541,6 @@ async function runServiceDeployment(
         effectiveService = mergeConfigWithService(
           service,
           frostConfigResult.config,
-          service.frostFilePath ?? "frost.yaml",
         );
       }
 
