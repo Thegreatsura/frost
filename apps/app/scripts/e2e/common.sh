@@ -145,6 +145,17 @@ get_container_name() {
   sanitize_name "frost-${SERVICE_ID}-${DEPLOY_ID}"
 }
 
+setup_github_app_settings() {
+  local WEBHOOK_SECRET=$1
+  api -X PUT "$BASE_URL/api/settings/github/test-credentials" \
+    -d "{\"appId\":\"test-app-id\",\"slug\":\"test-app\",\"name\":\"Test App\",\"privateKey\":\"test-private-key\",\"webhookSecret\":\"$WEBHOOK_SECRET\",\"clientId\":\"test-client-id\",\"clientSecret\":\"test-client-secret\"}" > /dev/null \
+    || return 1
+}
+
+cleanup_github_app_settings() {
+  api -X POST "$BASE_URL/api/settings/github/disconnect" > /dev/null || true
+}
+
 log() {
   local GROUP=$(basename "$0" .sh | sed 's/group-/G/')
   echo "[$GROUP] $*"
