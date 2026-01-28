@@ -1,0 +1,202 @@
+# AI Project Setup
+
+Instructions for AI agents to configure a project for deployment on Frost.
+
+Copy these instructions into your AI assistant's context so it can set up your project correctly.
+
+---
+
+## Instructions for AI
+
+You are configuring a project for deployment on **Frost**, a Docker-based deployment platform. The user will connect their git repo to Frost, which builds and runs a Docker container from it.
+
+Your job: ensure the repo has a working `Dockerfile` and optionally a `frost.yaml` config file.
+
+### Core Concept: PORT
+
+Frost injects a `PORT` environment variable (default: `8080`). The app **must** listen on this port.
+
+```
+# Read PORT from environment, fallback to 8080
+server.listen(process.env.PORT || 8080)
+```
+
+This applies to every language and framework. Do not hardcode a port. Always read from `PORT` env var.
+
+### Dockerfile Requirements
+
+The Dockerfile must:
+
+1. **Produce a runnable container** that starts the app on `CMD` or `ENTRYPOINT`
+2. **Listen on `PORT` env var** (not a hardcoded port)
+3. **Expose the correct port** via `EXPOSE`
+4. **Use multi-stage builds** when possible to reduce image size
+5. **Copy only what's needed** - use `.dockerignore` to exclude `node_modules`, `.git`, etc.
+
+Key points:
+
+- No need to set `ENV PORT=8080` in the Dockerfile - Frost injects it at runtime
+- All project and service environment variables are available as build args during `docker build`
+- The working directory structure is up to you
+
+### frost.yaml (Optional)
+
+Place `frost.yaml` at the repo root to configure deployment settings. All fields are optional.
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/elitan/frost/main/apps/app/frost.schema.json
+
+dockerfile: Dockerfile
+port: 8080
+health_check:
+  path: /health
+  timeout: 30
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `dockerfile` | string | Path to Dockerfile relative to repo root. Default: `Dockerfile` |
+| `port` | number | Port the app listens on (1-65535). Default: 8080 |
+| `health_check.path` | string | HTTP endpoint for health checks (e.g., `/health`). If omitted, uses TCP check |
+| `health_check.timeout` | number | Seconds to wait for healthy status (1-300). Default: 60 |
+
+Schema is strict - unknown keys are rejected.
+
+For monorepos, the service's **Config File Path** setting in Frost can point to a subfolder (e.g., `services/api/frost.yaml`).
+
+### Monorepo Setup
+
+For monorepos, place `Dockerfile` and `frost.yaml` next to the app being deployed:
+
+```
+apps/web/Dockerfile
+apps/web/frost.yaml
+```
+
+In `frost.yaml`, set the Dockerfile path relative to the repo root:
+
+```yaml
+dockerfile: apps/web/Dockerfile
+```
+
+In Frost, set **Config File Path** to `apps/web/frost.yaml` and **Build Context** to the repo root.
+
+**Important:**
+- The `.dockerignore` must not exclude sibling workspace `package.json` files — package managers need them to resolve workspace dependencies during install
+- Most package managers (bun, pnpm) hoist dependencies to the root `node_modules` — don't try to copy per-app `node_modules` in the Dockerfile
+
+### Health Checks
+
+Two modes:
+
+- **TCP** (default) - Frost checks if the port accepts connections
+- **HTTP** - Frost makes a `GET` request to the path and expects a 2xx response
+
+If your app has a health endpoint, configure it:
+
+```yaml
+health_check:
+  path: /health
+  timeout: 30
+```
+
+If not, implement one. A minimal health endpoint that returns 200 is sufficient.
+
+### Environment Variables
+
+Frost merges environment variables from two levels:
+
+1. **Project-level** - shared across all services
+2. **Service-level** - overrides project-level
+
+These are set in the Frost UI, not in the repo. Your app should read config from environment variables.
+
+Frost also injects these read-only variables at runtime:
+
+| Variable | Description |
+|----------|-------------|
+| `PORT` | Port to listen on |
+| `FROST` | Always `1` - detect Frost runtime |
+| `FROST_SERVICE_NAME` | Service name |
+| `FROST_PROJECT_NAME` | Project name |
+| `FROST_GIT_COMMIT_SHA` | Full commit SHA |
+| `FROST_GIT_BRANCH` | Branch name |
+
+### Inter-Service Communication
+
+Services in the same project share a Docker network. Use the service hostname to communicate:
+
+```
+http://<service-name>:8080/api
+```
+
+The hostname is the service name (slugified). No need for external URLs or service discovery.
+
+### .dockerignore
+
+Always create a `.dockerignore` to keep images small and builds fast:
+
+```
+node_modules
+.git
+.env
+.env.*
+dist
+build
+.next
+*.md
+.DS_Store
+```
+
+Adapt to your language/framework.
+
+### Verify Locally
+
+Before pushing, verify the Docker build and run works locally:
+
+```bash
+# Build the image
+docker build -t my-app .
+
+# Run with PORT env var (same as Frost does)
+docker run -p 8080:8080 -e PORT=8080 my-app
+
+# Test it responds
+curl http://localhost:8080
+```
+
+If you configured a health check path:
+
+```bash
+curl http://localhost:8080/health
+```
+
+The container should start and respond within the configured timeout (default 60s).
+
+### Common Issues
+
+**App not reachable** - Listening on `localhost` or `127.0.0.1` instead of `0.0.0.0`. Containers must bind to `0.0.0.0`.
+
+```
+# Wrong
+server.listen(PORT, "localhost")
+
+# Correct
+server.listen(PORT, "0.0.0.0")
+```
+
+**Build fails** - Missing dependencies in Dockerfile. Ensure all system deps are installed in the build stage.
+
+**Health check timeout** - App takes too long to start. Increase `health_check.timeout` in `frost.yaml` or optimize startup.
+
+**Port mismatch** - App listens on a different port than what Frost expects. Use `PORT` env var or set `port` in `frost.yaml` to match.
+
+### Summary Checklist
+
+- [ ] Dockerfile exists at repo root (or path configured in `frost.yaml`)
+- [ ] App reads `PORT` env var and listens on it
+- [ ] App binds to `0.0.0.0`, not `localhost`
+- [ ] `.dockerignore` excludes unnecessary files
+- [ ] `docker build` and `docker run -e PORT=8080` works locally
+- [ ] Health check endpoint exists (if using HTTP health checks)
+- [ ] `frost.yaml` added if non-default config needed
