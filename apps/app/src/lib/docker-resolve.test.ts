@@ -39,8 +39,8 @@ describe("resolveDockerfilePath", () => {
   });
 
   test("root dockerfile with subdirectory build context", () => {
-    expect(
-      resolveDockerfilePath(repoPath, "Dockerfile", "apps/web"),
-    ).toBe("../../Dockerfile");
+    expect(resolveDockerfilePath(repoPath, "Dockerfile", "apps/web")).toBe(
+      "../../Dockerfile",
+    );
   });
 });

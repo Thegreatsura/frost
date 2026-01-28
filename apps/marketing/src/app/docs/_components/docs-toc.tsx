@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy, Check } from "lucide-react";
+import { Check, Copy } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -83,7 +83,9 @@ export function DocsToc() {
 
   const handleCopy = useCallback(async () => {
     const path = pathname.replace("/docs", "") || "";
-    const res = await fetch(`/api/docs-markdown?path=${encodeURIComponent(path)}`);
+    const res = await fetch(
+      `/api/docs-markdown?path=${encodeURIComponent(path)}`,
+    );
     if (!res.ok) return;
     const text = await res.text();
     await navigator.clipboard.writeText(text);
@@ -121,7 +123,11 @@ export function DocsToc() {
         onClick={handleCopy}
         className="mt-4 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
       >
-        {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+        {copied ? (
+          <Check className="size-3.5" />
+        ) : (
+          <Copy className="size-3.5" />
+        )}
         {copied ? "Copied" : "Copy as Markdown"}
       </button>
     </div>

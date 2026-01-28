@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { mergeConfigWithService, parseFrostConfig } from "./frost-config";
 import type { FrostConfig } from "./frost-config";
+import { mergeConfigWithService, parseFrostConfig } from "./frost-config";
 
 describe("parseFrostConfig", () => {
   test("parses minimal config", () => {
@@ -119,10 +119,10 @@ function makeService(overrides: Record<string, unknown> = {}) {
   return {
     dockerfilePath: "Dockerfile",
     containerPort: 8080,
-    healthCheckPath: null,
-    healthCheckTimeout: null,
-    memoryLimit: null,
-    cpuLimit: null,
+    healthCheckPath: null as string | null,
+    healthCheckTimeout: null as number | null,
+    memoryLimit: null as string | null,
+    cpuLimit: null as number | null,
     ...overrides,
   };
 }
