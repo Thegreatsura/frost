@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { parseFrostConfig } from "./frost-config";
+import { mergeConfigWithService, parseFrostConfig } from "./frost-config";
+import type { FrostConfig } from "./frost-config";
 
 describe("parseFrostConfig", () => {
   test("parses minimal config", () => {
@@ -111,5 +112,55 @@ resources:
 
   test("throws on unknown keys (strict mode)", () => {
     expect(() => parseFrostConfig("unknown_key: value")).toThrow();
+  });
+});
+
+function makeService(overrides: Record<string, unknown> = {}) {
+  return {
+    dockerfilePath: "Dockerfile",
+    containerPort: 8080,
+    healthCheckPath: null,
+    healthCheckTimeout: null,
+    memoryLimit: null,
+    cpuLimit: null,
+    ...overrides,
+  };
+}
+
+describe("mergeConfigWithService", () => {
+  test("no frost config dockerfile keeps service default", () => {
+    const service = makeService();
+    const config: FrostConfig = { port: 3000 };
+    const result = mergeConfigWithService(service, config);
+    expect(result.dockerfilePath).toBe("Dockerfile");
+    expect(result.containerPort).toBe(3000);
+  });
+
+  test("frost.yaml at repo root resolves dockerfile as-is", () => {
+    const service = makeService();
+    const config: FrostConfig = { dockerfile: "build/Dockerfile.prod" };
+    const result = mergeConfigWithService(service, config, "frost.yaml");
+    expect(result.dockerfilePath).toBe("build/Dockerfile.prod");
+  });
+
+  test("frost.yaml in subdirectory prepends directory to dockerfile", () => {
+    const service = makeService();
+    const config: FrostConfig = { dockerfile: "Dockerfile" };
+    const result = mergeConfigWithService(service, config, "apps/web/frost.yaml");
+    expect(result.dockerfilePath).toBe("apps/web/Dockerfile");
+  });
+
+  test("frost.yaml in subdirectory with custom dockerfile name", () => {
+    const service = makeService();
+    const config: FrostConfig = { dockerfile: "Dockerfile.prod" };
+    const result = mergeConfigWithService(service, config, "services/api/frost.yaml");
+    expect(result.dockerfilePath).toBe("services/api/Dockerfile.prod");
+  });
+
+  test("no frostFilePath defaults to root directory", () => {
+    const service = makeService();
+    const config: FrostConfig = { dockerfile: "Dockerfile" };
+    const result = mergeConfigWithService(service, config);
+    expect(result.dockerfilePath).toBe("Dockerfile");
   });
 });
