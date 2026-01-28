@@ -86,9 +86,11 @@ export default function ProjectLayout({
     ? `/projects/${projectId}/environments/${currentEnvId}`
     : `/projects/${projectId}`;
 
-  const settingsUrl = currentEnvId
-    ? `/projects/${projectId}/settings?env=${currentEnvId}`
-    : `/projects/${projectId}/settings`;
+  const currentEnv = environments.find((e) => e.id === currentEnvId);
+  const isProduction = !currentEnv || currentEnv.type === "production";
+  const settingsUrl = isProduction
+    ? `/projects/${projectId}/settings`
+    : `/projects/${projectId}/settings/environments?env=${currentEnvId}`;
 
   const tabs = [
     { label: "Overview", href: overviewUrl },

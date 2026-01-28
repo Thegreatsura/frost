@@ -40,7 +40,7 @@ export function EnvironmentPicker({
         {currentName}
         <ChevronDown className="h-3.5 w-3.5 opacity-50" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-48">
+      <DropdownMenuContent align="start" className="min-w-48">
         <DropdownMenuLabel>Environments</DropdownMenuLabel>
         <DropdownMenuRadioGroup value={currentEnvId} onValueChange={onSelect}>
           {environments.map((env) => (
