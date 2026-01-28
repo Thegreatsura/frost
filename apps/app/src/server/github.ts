@@ -193,9 +193,8 @@ export const github = {
 
         let dockerfilePath = dockerfileByDir.get(dir);
         if (config?.dockerfile) {
-          const customPath =
+          dockerfilePath =
             dir === "." ? config.dockerfile : `${dir}/${config.dockerfile}`;
-          dockerfilePath = customPath;
         }
 
         if (!dockerfilePath) continue;

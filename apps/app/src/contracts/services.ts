@@ -137,6 +137,7 @@ export const servicesContract = {
               .regex(/^\d+[kmg]$/i)
               .optional(),
             cpuLimit: z.number().min(0.1).max(64).optional(),
+            frostFilePath: z.string().optional(),
           }),
         ),
       }),

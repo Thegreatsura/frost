@@ -427,6 +427,7 @@ export const services = {
           healthCheckTimeout: svc.healthCheckTimeout,
           memoryLimit: svc.memoryLimit,
           cpuLimit: svc.cpuLimit,
+          frostFilePath: svc.frostFilePath,
           autoDeploy: true,
           wildcardDomain: { projectHostname, environmentName: envName },
         });
