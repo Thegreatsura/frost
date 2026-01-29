@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import "./globals.css";
 import { Header } from "@/components/header";
 
@@ -35,6 +36,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        <Script
+          defer
+          data-domain="frost.build"
+          src="https://analytics.j4labs.se/js/script.js"
+        />
+      </head>
       <body className="antialiased">
         <div className="noise-overlay" />
         <Header />
