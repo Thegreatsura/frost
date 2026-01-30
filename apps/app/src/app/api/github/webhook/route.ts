@@ -274,8 +274,6 @@ async function handlePullRequest(rawBody: string) {
   ]);
   const body = buildPRCommentBody({
     services: serviceStatuses,
-    branch,
-    commitSha,
     projectId,
     environmentId,
     frostDomain,

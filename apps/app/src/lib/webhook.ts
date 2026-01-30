@@ -291,46 +291,46 @@ function formatDate(date: Date): string {
 
 export interface BuildPRCommentParams {
   services: ServiceDeployStatus[];
-  branch: string;
-  commitSha: string;
   projectId: string;
   environmentId: string;
   frostDomain: string | null;
 }
 
-function getStatusBadge(status: string): string {
-  const baseUrl = "https://frost.build/static/status";
-  if (status === "running") {
-    return `![Ready](${baseUrl}/ready.svg)`;
-  }
-  if (status === "failed") {
-    return `![Failed](${baseUrl}/failed.svg)`;
-  }
-  return `![Building](${baseUrl}/building.svg)`;
+function getStatusLabel(status: string): { label: string; icon: string } {
+  if (status === "running") return { label: "Ready", icon: "ready" };
+  if (status === "failed") return { label: "Failed", icon: "failed" };
+  return { label: "Building", icon: "building" };
+}
+
+function getStatusCell(status: string, dashboardUrl: string | null): string {
+  const { label, icon } = getStatusLabel(status);
+  const linked = dashboardUrl ? `[${label}](${dashboardUrl})` : label;
+  return `![](https://frost.build/static/status/${icon}.svg) ${linked}`;
 }
 
 export function buildPRCommentBody(params: BuildPRCommentParams): string {
-  const { services, branch, commitSha, projectId, environmentId, frostDomain } =
-    params;
+  const { services, projectId, environmentId, frostDomain } = params;
+
+  function dashboardUrl(serviceId: string): string | null {
+    if (!frostDomain) return null;
+    return `https://${frostDomain}/projects/${projectId}/environments/${environmentId}?service=${serviceId}`;
+  }
 
   const rows = services
     .map((s) => {
-      const statusBadge = getStatusBadge(s.status);
-      const serviceLink = frostDomain
-        ? `[${s.name}](https://${frostDomain}/projects/${projectId}/environments/${environmentId}?service=${s.id})`
-        : s.name;
+      const url = dashboardUrl(s.id);
+      const name = url ? `[${s.name}](${url})` : s.name;
+      const status = getStatusCell(s.status, url);
       const preview = s.url ? `[Visit](${s.url})` : "-";
-      return `| ${serviceLink} | ${statusBadge} | ${preview} |`;
+      return `| ${name} | ${status} | ${preview} |`;
     })
     .join("\n");
-
-  const now = formatDate(new Date());
 
   return `| Service | Status | Preview |
 |---------|--------|---------|
 ${rows}
 
-**Branch:** \`${branch}\` · **Commit:** \`${commitSha.substring(0, 7)}\` · *Updated: ${now}*`;
+*Updated: ${formatDate(new Date())}*`;
 }
 
 export async function getEnvironmentServiceStatuses(
@@ -389,21 +389,13 @@ export async function updateEnvironmentPRComment(
 
   if (!env?.prCommentId || !env.prBranch) return;
 
-  const [latestDeployment, statuses, frostDomain] = await Promise.all([
-    db
-      .selectFrom("deployments")
-      .select("commitSha")
-      .where("environmentId", "=", environmentId)
-      .orderBy("createdAt", "desc")
-      .executeTakeFirst(),
+  const [statuses, frostDomain] = await Promise.all([
     getEnvironmentServiceStatuses(environmentId),
     getSetting("domain"),
   ]);
 
   const body = buildPRCommentBody({
     services: statuses,
-    branch: env.prBranch,
-    commitSha: latestDeployment?.commitSha ?? "HEAD",
     projectId: env.projectId,
     environmentId,
     frostDomain,
