@@ -7,7 +7,7 @@ export const envVarSchema = z.object({
 });
 
 export const volumeConfigSchema = z.object({
-  name: z.string().regex(/^[a-z0-9-]+$/),
+  name: z.string().regex(/^[a-z0-9._-]+$/),
   path: z.string().startsWith("/"),
 });
 
