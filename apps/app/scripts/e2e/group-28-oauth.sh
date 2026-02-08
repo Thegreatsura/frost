@@ -32,10 +32,12 @@ if [ -z "$CLIENT_ID" ] || [ "$CLIENT_ID" = "null" ]; then
 fi
 log "Client registered: $CLIENT_ID"
 
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-e2eTestPassword123}"
+
 log "Step 3: Login to get session cookie..."
 LOGIN_RESULT=$(curl -s -X POST "$BASE_URL/api/auth/login" \
   -H "Content-Type: application/json" \
-  -d '{"password":"dev"}' \
+  -d "{\"password\":\"$ADMIN_PASSWORD\"}" \
   -c /tmp/frost-oauth-cookies.txt)
 LOGIN_OK=$(echo "$LOGIN_RESULT" | jq -r '.success')
 if [ "$LOGIN_OK" != "true" ]; then

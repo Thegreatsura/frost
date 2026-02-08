@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
+import { getRequestOrigin } from "@/lib/request-utils";
 
 export function GET(request: Request) {
-  const url = new URL(request.url);
-  const origin = url.origin;
+  const origin = getRequestOrigin(request);
 
   return NextResponse.json({
     issuer: origin,

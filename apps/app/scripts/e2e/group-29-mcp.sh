@@ -17,9 +17,11 @@ if [ -z "$CLIENT_ID" ] || [ "$CLIENT_ID" = "null" ]; then
   fail "Client registration failed: $CLIENT"
 fi
 
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-e2eTestPassword123}"
+
 LOGIN_RESULT=$(curl -s -X POST "$BASE_URL/api/auth/login" \
   -H "Content-Type: application/json" \
-  -d '{"password":"dev"}' \
+  -d "{\"password\":\"$ADMIN_PASSWORD\"}" \
   -c /tmp/frost-mcp-cookies.txt)
 
 CODE_VERIFIER=$(openssl rand -hex 32)
