@@ -2,6 +2,7 @@ import { createHmac } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { isSetupComplete, verifyApiToken } from "./lib/auth";
+import { verifyOAuthToken } from "./lib/oauth";
 
 const DEFAULT_SECRET = "frost-default-secret-change-me";
 const JWT_SECRET = process.env.FROST_JWT_SECRET || DEFAULT_SECRET;
@@ -34,6 +35,10 @@ const PUBLIC_PATHS = [
   "/api/github/webhook",
   "/api/openapi.json",
   "/api/docs",
+  "/.well-known/",
+  "/api/oauth/register",
+  "/api/oauth/token",
+  "/api/oauth/revoke",
 ];
 
 function isPublicPath(pathname: string): boolean {
@@ -53,6 +58,14 @@ export async function proxy(request: NextRequest) {
   const apiToken = request.headers.get("x-frost-token");
   if (apiToken && (await verifyApiToken(apiToken))) {
     return NextResponse.next();
+  }
+
+  const authHeader = request.headers.get("authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    const bearerToken = authHeader.slice(7);
+    if (await verifyOAuthToken(bearerToken)) {
+      return NextResponse.next();
+    }
   }
 
   if (!(await isSetupComplete())) {
