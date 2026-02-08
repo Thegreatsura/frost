@@ -5,7 +5,10 @@ import { createMcpServer } from "@/lib/mcp/server";
 const g = globalThis as typeof globalThis & {
   __mcpSessions?: Map<string, WebStandardStreamableHTTPServerTransport>;
 };
-const sessions = (g.__mcpSessions ??= new Map());
+if (!g.__mcpSessions) {
+  g.__mcpSessions = new Map();
+}
+const sessions = g.__mcpSessions;
 
 function createTransport(): WebStandardStreamableHTTPServerTransport {
   const transport = new WebStandardStreamableHTTPServerTransport({
