@@ -2,16 +2,12 @@ import { randomUUID } from "node:crypto";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { createMcpServer } from "@/lib/mcp/server";
 
-const sessions = new Map<string, WebStandardStreamableHTTPServerTransport>();
+const g = globalThis as typeof globalThis & {
+  __mcpSessions?: Map<string, WebStandardStreamableHTTPServerTransport>;
+};
+const sessions = (g.__mcpSessions ??= new Map());
 
-async function getOrCreateTransport(
-  sessionId: string | null,
-): Promise<WebStandardStreamableHTTPServerTransport> {
-  if (sessionId) {
-    const existing = sessions.get(sessionId);
-    if (existing) return existing;
-  }
-
+function createTransport(): WebStandardStreamableHTTPServerTransport {
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: () => randomUUID(),
     onsessioninitialized(id) {
@@ -21,10 +17,6 @@ async function getOrCreateTransport(
       sessions.delete(id);
     },
   });
-
-  const server = createMcpServer();
-  await server.connect(transport);
-
   return transport;
 }
 
@@ -40,7 +32,15 @@ async function handleRequest(request: Request): Promise<Response> {
     return new Response(null, { status: 200 });
   }
 
-  const transport = await getOrCreateTransport(sessionId);
+  if (sessionId) {
+    const existing = sessions.get(sessionId);
+    if (!existing) return new Response(null, { status: 404 });
+    return existing.handleRequest(request);
+  }
+
+  const transport = createTransport();
+  const server = createMcpServer();
+  await server.connect(transport);
   return transport.handleRequest(request);
 }
 
