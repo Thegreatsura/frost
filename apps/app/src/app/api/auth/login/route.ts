@@ -37,7 +37,7 @@ export async function POST(request: Request) {
 
   response.cookies.set("frost_session", token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: request.headers.get("x-forwarded-proto") === "https",
     sameSite: "lax",
     maxAge: 7 * 24 * 60 * 60,
     path: "/",
