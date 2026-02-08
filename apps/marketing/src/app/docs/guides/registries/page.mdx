@@ -1,0 +1,19 @@
+# Private Registries
+
+Pull images from private Docker registries.
+
+## Supported Registries
+
+- Docker Hub (private repos)
+- GitHub Container Registry (ghcr.io)
+- Custom registries
+
+## Setup
+
+1. Go to **Settings > Registries**
+2. Add a registry with your credentials (URL, username, password)
+3. When creating an image-type service, select the registry to authenticate pulls
+
+## Usage
+
+Once a registry is configured, select it when creating or updating a service that uses `image` deploy type. Frost will log in to the registry before pulling the image.

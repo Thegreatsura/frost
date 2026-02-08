@@ -1,0 +1,46 @@
+# Replicas & Zero-Downtime Deployments
+
+Run multiple instances of a service and deploy without downtime.
+
+## Replicas
+
+Configure the number of container replicas (1-10) per service.
+
+### frost.yaml
+
+```yaml
+deploy:
+  replicas: 3
+```
+
+### UI
+
+Set **Replicas** in service settings under the Deploy section.
+
+## Zero-Downtime Deployments
+
+When deploying a service that already has a running deployment, Frost performs a zero-downtime deployment:
+
+1. New container(s) start alongside the old ones
+2. Health checks run on the new containers
+3. Once healthy, traffic switches to the new containers
+4. Old containers drain existing connections for `drain_timeout` seconds
+5. After draining, old containers receive SIGTERM
+6. If still running after `shutdown_timeout` seconds, SIGKILL is sent
+
+## Configuration
+
+| Field | Description |
+|-------|-------------|
+| `deploy.replicas` | Number of container instances (1-10, default 1) |
+| `deploy.drain_timeout` | Seconds to keep old containers alive for connection draining (0-300, default 30) |
+| `deploy.shutdown_timeout` | Seconds between SIGTERM and SIGKILL for old containers (1-300, default 30) |
+
+### frost.yaml
+
+```yaml
+deploy:
+  replicas: 2
+  drain_timeout: 60
+  shutdown_timeout: 30
+```

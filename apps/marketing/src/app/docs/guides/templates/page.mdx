@@ -1,0 +1,23 @@
+# Templates
+
+Templates provide one-click setup for common services, databases, and multi-service projects.
+
+## Types
+
+**Databases** - PostgreSQL, Redis, MongoDB, and more. Pre-configured with volumes and health checks.
+
+**Services** - Self-hosted apps like MinIO, Grafana, PocketBase. Ready to deploy with sensible defaults.
+
+**Projects** - Multi-service stacks (e.g., app + database). Services are pre-wired to communicate with each other.
+
+## Usage
+
+Select a template when creating a new service or project in the Frost UI.
+
+## Auto-Generated Secrets
+
+Templates can auto-generate secure values for passwords and tokens. Fields like `POSTGRES_PASSWORD` are filled with random secrets on creation.
+
+## Cross-Service References
+
+In project templates, services can reference each other's environment variables. For example, a web app template might reference the database password from the postgres service, so connection strings are configured automatically.

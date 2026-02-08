@@ -1,0 +1,21 @@
+# Volumes
+
+Volumes provide persistent storage that survives container restarts and redeploys.
+
+## When to Use
+
+Use volumes for data that must persist across deployments: database files, uploaded content, cache directories.
+
+## Configuration
+
+Add volumes in service settings. Each volume needs:
+
+- **Name** - Identifier for the volume (lowercase, numbers, dots, dashes)
+- **Mount Path** - Absolute path inside the container (e.g., `/data`)
+
+## Behavior
+
+- Volumes are created automatically on first deploy
+- Data persists across redeploys and container restarts
+- Volumes are scoped to a service — not shared between services
+- Services with volumes cannot be rolled back (to prevent data corruption)

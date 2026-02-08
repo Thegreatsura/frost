@@ -1,0 +1,97 @@
+# MCP / AI Agents
+
+MCP (Model Context Protocol) lets AI agents like Claude Code and Cursor interact with your Frost instance directly — deploy services, check logs, manage domains, all from your editor.
+
+Each Frost instance exposes an MCP endpoint. Authentication uses OAuth 2.1 with browser-based approval, so there are no tokens to copy-paste.
+
+---
+
+## Connect Claude Code
+
+Add to `~/.claude.json` (global) or `.mcp.json` (project-level):
+
+```json
+{
+  "mcpServers": {
+    "frost": {
+      "type": "http",
+      "url": "https://your-frost-server.com/api/mcp"
+    }
+  }
+}
+```
+
+On first use, your browser opens for approval. No tokens to copy.
+
+## Connect Cursor
+
+Same config format. Add to your Cursor MCP settings:
+
+```json
+{
+  "mcpServers": {
+    "frost": {
+      "type": "http",
+      "url": "https://your-frost-server.com/api/mcp"
+    }
+  }
+}
+```
+
+---
+
+## Available Tools
+
+| Tool | Input | Description |
+|------|-------|-------------|
+| `list_projects` | — | List all projects with service count |
+| `get_project` | `projectId` | Get project details with all services |
+| `create_project` | `name` | Create a new empty project |
+| `delete_project` | `projectId` | Delete project and all resources |
+| `list_services` | `projectId` | List services with latest deployment status |
+| `get_service` | `serviceId` | Get service config + latest deployment |
+| `create_service` | `projectId, name, deployType, ...` | Create a service |
+| `update_service` | `serviceId, ...` | Update service settings |
+| `delete_service` | `serviceId` | Delete a service |
+| `deploy_service` | `serviceId` | Trigger deployment |
+| `deploy_project` | `projectId` | Deploy all services in project |
+| `get_deployment` | `deploymentId` | Get deployment status and details |
+| `list_deployments` | `serviceId, limit?` | Recent deployments for a service |
+| `rollback` | `deploymentId` | Rollback to a previous deployment |
+| `list_env_vars` | `serviceId` | Get environment variables |
+| `set_env_vars` | `serviceId, vars` | Set/update environment variables |
+| `list_domains` | `serviceId` | List domains for a service |
+| `add_domain` | `serviceId, domain` | Add a domain |
+| `remove_domain` | `domainId` | Remove a domain |
+| `get_build_log` | `deploymentId` | Get build/deploy log |
+| `get_runtime_logs` | `serviceId, tail?` | Get recent container logs |
+
+---
+
+## Authentication
+
+Frost uses OAuth 2.1 with PKCE for MCP authentication:
+
+1. Agent connects to `/api/mcp` and gets a `401`
+2. Discovers auth server via `/.well-known/oauth-protected-resource`
+3. Registers as a client via `/api/oauth/register`
+4. Opens your browser — you log in and approve access
+5. Agent gets an access token, stores it locally
+6. All subsequent requests include the Bearer token
+
+Tokens don't expire. You can view and revoke active tokens in **Settings → MCP Tokens**.
+
+For programmatic/CI access, you can also use `x-frost-token` header with an API key from Settings.
+
+---
+
+## Example Workflows
+
+Once connected, you can interact with Frost naturally:
+
+- **"Deploy my service"** → agent calls `deploy_service`
+- **"Show me the build logs for the latest deployment"** → `get_build_log`
+- **"Add example.com to my api service"** → `add_domain`
+- **"What's the status of my project?"** → `list_services`
+- **"Roll back the last deployment"** → `rollback`
+- **"Set DATABASE_URL for my backend"** → `set_env_vars`

@@ -1,0 +1,27 @@
+# API
+
+Frost has a REST API for programmatic access.
+
+## Authentication
+
+Include the `X-Frost-Token` header with your API key:
+
+```bash
+curl https://your-frost-server/api/projects \
+  -H "X-Frost-Token: your-api-key"
+```
+
+## Creating an API Key
+
+Go to **Settings > API Keys** and create a new key. The full key is shown once — save it somewhere safe.
+
+## Example: Deploy a Service
+
+```bash
+curl -X POST https://your-frost-server/api/services/SERVICE_ID/deploy \
+  -H "X-Frost-Token: your-api-key"
+```
+
+## API Reference
+
+Full API documentation is available at `/api/docs` on your Frost instance.

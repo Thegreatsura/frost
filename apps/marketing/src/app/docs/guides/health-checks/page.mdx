@@ -1,0 +1,40 @@
+# Health Checks
+
+Frost health checks verify your container is ready to receive traffic before routing requests to it.
+
+## Modes
+
+**TCP** (default) - Frost checks if the container's port accepts connections.
+
+**HTTP** - Frost makes a `GET` request to a path and expects a 2xx response. Set `health_check.path` to enable.
+
+## Configuration
+
+### frost.yaml
+
+```yaml
+health_check:
+  path: /health
+  timeout: 60
+```
+
+### UI
+
+Set **Health Check Path** and **Health Check Timeout** in service settings.
+
+## Fields
+
+| Field | Description |
+|-------|-------------|
+| `health_check.path` | HTTP endpoint to check. Omit for TCP mode |
+| `health_check.timeout` | Seconds to wait for healthy status (1-300, default 60) |
+
+## Troubleshooting
+
+**Health check fails immediately** - Your app is likely binding to `localhost` or `127.0.0.1`. Containers must bind to `0.0.0.0`.
+
+**Health check times out** - App takes too long to start. Increase `health_check.timeout` or optimize startup time.
+
+**HTTP health check returns non-2xx** - Ensure the path returns a 200-299 status code. Check app logs for errors.
+
+**Works locally but fails on Frost** - Verify the health endpoint works inside the container, not just on the host. Run `docker run` locally and test with `curl`.

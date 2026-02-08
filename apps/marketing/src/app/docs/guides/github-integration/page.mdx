@@ -1,0 +1,32 @@
+# GitHub Integration
+
+Connect Frost to GitHub for automatic deployments and PR previews.
+
+## Setup
+
+1. Go to **Settings > GitHub**
+2. Follow the prompts to install the Frost GitHub App on your repositories
+3. Once installed, connect individual services to their repos
+
+## Auto-Deploy
+
+When enabled, pushing to a service's configured branch triggers an automatic deployment.
+
+- Toggle per-service in service settings
+- Only triggers on the branch the service is configured to deploy from
+- Requires the GitHub App to be installed on the repo
+
+## PR Preview Environments
+
+When a pull request is opened against a connected repo, Frost automatically creates a preview environment:
+
+- Services from the production environment are cloned into the preview
+- A deployment runs for the service matching the PR's repo
+- Frost posts a status comment on the PR with the preview URL and deployment status
+- When the PR is closed or merged, the preview environment is automatically destroyed
+
+## Requirements
+
+- GitHub App installed on your organization or account
+- Repository connected to a Frost service
+- Service must use `repo` deploy type

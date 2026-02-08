@@ -1,0 +1,28 @@
+# Resource Limits
+
+Control how much CPU and memory a service can use.
+
+## Configuration
+
+### frost.yaml
+
+```yaml
+resources:
+  memory: 512m
+  cpu: 1
+```
+
+### UI
+
+Set **Memory Limit** and **CPU Limit** in service settings.
+
+## Fields
+
+| Field | Description | Examples |
+|-------|-------------|----------|
+| `resources.memory` | Maximum memory | `256m`, `512m`, `1g`, `2g` |
+| `resources.cpu` | Maximum CPU cores | `0.5`, `1`, `2` |
+
+## Defaults
+
+No limits are set by default — containers can use all available host resources. Set limits to prevent a single service from consuming everything.

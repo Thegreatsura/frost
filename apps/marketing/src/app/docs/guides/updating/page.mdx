@@ -1,0 +1,18 @@
+# Updating Frost
+
+## From the UI
+
+Go to **Settings > Updates** to check for and install updates.
+
+## From the CLI
+
+```bash
+sudo /opt/frost/update.sh
+```
+
+## What Happens
+
+1. Downloads the new release
+2. Runs database migrations
+3. Restarts Frost
+4. If anything fails, automatically rolls back to the previous version
