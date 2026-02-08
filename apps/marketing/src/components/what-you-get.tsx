@@ -5,10 +5,10 @@ import {
   Activity,
   GitBranch,
   Globe,
-  Key,
   Lock,
   RotateCcw,
   Settings,
+  Terminal,
   Zap,
 } from "lucide-react";
 import { IconBox } from "./icon-box";
@@ -50,9 +50,10 @@ const features = [
     description: "Set memory and CPU limits. Keep services in check.",
   },
   {
-    icon: Key,
-    title: "API Access",
-    description: "Full REST API. Create API keys for CI/CD pipelines.",
+    icon: Terminal,
+    title: "MCP / AI Agents",
+    description:
+      "Connect Claude Code, Cursor, or any MCP client. Deploy from your editor.",
   },
 ];
 

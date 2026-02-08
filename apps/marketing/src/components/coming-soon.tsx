@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { FileCode, GitBranch, HardDrive, Terminal } from "lucide-react";
+import { GitBranch, HardDrive } from "lucide-react";
 
 const upcoming = [
   {
@@ -13,16 +13,6 @@ const upcoming = [
     name: "Postgres Branching",
     description: "Branch databases like code",
     icon: GitBranch,
-  },
-  {
-    name: "CLI",
-    description: "Deploy and manage from your terminal",
-    icon: Terminal,
-  },
-  {
-    name: "YAML Config",
-    description: "Infrastructure as code, version controlled",
-    icon: FileCode,
   },
 ];
 
