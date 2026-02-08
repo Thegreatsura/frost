@@ -85,17 +85,18 @@ fi
 log "Got access token: ${ACCESS_TOKEN:0:20}..."
 
 log "Step 7: Verify Bearer token works..."
-HEALTH=$(curl -s -H "Authorization: Bearer $ACCESS_TOKEN" "$BASE_URL/api/health")
-OK=$(echo "$HEALTH" | jq -r '.ok')
-if [ "$OK" != "true" ]; then
-  fail "Bearer token auth failed: $HEALTH"
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  "$BASE_URL/api/projects")
+if [ "$HTTP_CODE" != "200" ]; then
+  fail "Bearer token auth failed: got $HTTP_CODE"
 fi
 log "Bearer token auth works"
 
 log "Step 8: Verify invalid token rejected..."
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
   -H "Authorization: Bearer frost_at_invalid_token" \
-  "$BASE_URL/api/health")
+  "$BASE_URL/api/projects")
 if [ "$HTTP_CODE" != "401" ]; then
   fail "Expected 401 for invalid token, got $HTTP_CODE"
 fi
@@ -112,17 +113,18 @@ if [ -z "$NEW_ACCESS_TOKEN" ] || [ "$NEW_ACCESS_TOKEN" = "null" ]; then
 fi
 log "Token refreshed"
 
-HEALTH=$(curl -s -H "Authorization: Bearer $NEW_ACCESS_TOKEN" "$BASE_URL/api/health")
-OK=$(echo "$HEALTH" | jq -r '.ok')
-if [ "$OK" != "true" ]; then
-  fail "New access token doesn't work: $HEALTH"
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+  -H "Authorization: Bearer $NEW_ACCESS_TOKEN" \
+  "$BASE_URL/api/projects")
+if [ "$HTTP_CODE" != "200" ]; then
+  fail "New access token doesn't work: got $HTTP_CODE"
 fi
 log "New access token works"
 
 log "Step 10: Old access token should fail after refresh..."
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
   -H "Authorization: Bearer $ACCESS_TOKEN" \
-  "$BASE_URL/api/health")
+  "$BASE_URL/api/projects")
 if [ "$HTTP_CODE" != "401" ]; then
   fail "Old access token should be invalid after refresh, got $HTTP_CODE"
 fi
@@ -135,7 +137,7 @@ curl -s -X POST "$BASE_URL/api/oauth/revoke" \
 
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
   -H "Authorization: Bearer $NEW_ACCESS_TOKEN" \
-  "$BASE_URL/api/health")
+  "$BASE_URL/api/projects")
 if [ "$HTTP_CODE" != "401" ]; then
   fail "Revoked token should be invalid, got $HTTP_CODE"
 fi
