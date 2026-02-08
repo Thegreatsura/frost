@@ -5,6 +5,7 @@ import { domains } from "./domains";
 import { environments } from "./environments";
 import { github } from "./github";
 import { health } from "./health";
+import { mcpTokens } from "./mcp-tokens";
 import { os } from "./orpc";
 import { projects } from "./projects";
 import { registries } from "./registries";
@@ -22,6 +23,7 @@ export const router = os.router({
   environments,
   github,
   health,
+  mcpTokens,
   projects,
   registries,
   services,
