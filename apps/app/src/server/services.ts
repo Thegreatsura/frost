@@ -1,8 +1,13 @@
 import { ORPCError } from "@orpc/server";
 import type { Selectable } from "kysely";
-import { addLatestDeployment, addLatestDeployments, db } from "@/lib/db";
+import { db } from "@/lib/db";
 import type { Services } from "@/lib/db-types";
 import { deployService } from "@/lib/deployer";
+import {
+  addLatestDeploymentsWithRuntimeStatus,
+  addLatestDeploymentWithRuntimeStatus,
+  reconcileDeploymentsRuntimeStatus,
+} from "@/lib/deployment-runtime";
 import { syncCaddyConfig } from "@/lib/domains";
 import { cleanupService } from "@/lib/lifecycle";
 import { createService } from "@/lib/services";
@@ -23,7 +28,7 @@ export const services = {
       throw new ORPCError("NOT_FOUND", { message: "Service not found" });
     }
 
-    return addLatestDeployment(service);
+    return addLatestDeploymentWithRuntimeStatus(service);
   }),
 
   list: os.services.list.handler(async ({ input }) => {
@@ -33,7 +38,7 @@ export const services = {
       .where("environmentId", "=", input.environmentId)
       .execute();
 
-    return addLatestDeployments(services);
+    return addLatestDeploymentsWithRuntimeStatus(services);
   }),
 
   create: os.services.create.handler(async ({ input }) => {
@@ -326,15 +331,17 @@ export const services = {
     return { deploymentId };
   }),
 
-  listDeployments: os.services.listDeployments.handler(async ({ input }) =>
-    db
+  listDeployments: os.services.listDeployments.handler(async ({ input }) => {
+    const deployments = await db
       .selectFrom("deployments")
       .selectAll()
       .where("serviceId", "=", input.id)
       .orderBy("createdAt", "desc")
       .limit(20)
-      .execute(),
-  ),
+      .execute();
+
+    return reconcileDeploymentsRuntimeStatus(deployments);
+  }),
 
   getVolumes: os.services.getVolumes.handler(async ({ input }) => {
     const service = await db

@@ -2,6 +2,7 @@ import { ORPCError } from "@orpc/server";
 import { nanoid } from "nanoid";
 import { db } from "@/lib/db";
 import { deployEnvironment } from "@/lib/deployer";
+import { addLatestDeploymentsWithRuntimeStatus } from "@/lib/deployment-runtime";
 import { cleanupEnvironment } from "@/lib/lifecycle";
 import { createService } from "@/lib/services";
 import { slugify } from "@/lib/slugify";
@@ -34,19 +35,8 @@ export const environments = {
       .where("environmentId", "=", input.id)
       .execute();
 
-    const servicesWithDeployments = await Promise.all(
-      services.map(async (service) => {
-        const latestDeployment = await db
-          .selectFrom("deployments")
-          .selectAll()
-          .where("serviceId", "=", service.id)
-          .orderBy("createdAt", "desc")
-          .limit(1)
-          .executeTakeFirst();
-
-        return { ...service, latestDeployment: latestDeployment ?? null };
-      }),
-    );
+    const servicesWithDeployments =
+      await addLatestDeploymentsWithRuntimeStatus(services);
 
     return { ...environment, services: servicesWithDeployments };
   }),
