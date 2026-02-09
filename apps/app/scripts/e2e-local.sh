@@ -6,10 +6,11 @@ APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 E2E_DIR="$SCRIPT_DIR/e2e"
 
-BATCH_SIZE=${2:-2}
+BATCH_SIZE="${2:-${E2E_BATCH_SIZE:-2}}"
 PORT=${FROST_PORT:-3000}
 GROUP_GLOB="${E2E_GROUP_GLOB:-group-*.sh}"
 GROUP_LIST="${E2E_GROUPS:-}"
+START_STAGGER_SEC="${E2E_START_STAGGER_SEC:-1}"
 RETRY_FAILED="${E2E_RETRY_FAILED:-0}"
 REPORT_PATH="${E2E_REPORT_PATH:-}"
 REPORT_TMP=""
@@ -88,6 +89,10 @@ docker network prune -f > /dev/null 2>&1
 echo "✓ Docker cleanup done"
 
 if [ "${E2E_SKIP_PREPULL:-0}" != "1" ]; then
+  PREPULL_RETRIES="${E2E_PREPULL_RETRIES:-3}"
+  PREPULL_BACKOFF_SEC="${E2E_PREPULL_BACKOFF_SEC:-2}"
+  PREPULL_STRICT="${E2E_PREPULL_STRICT:-0}"
+
   if [ -n "${E2E_PREPULL_IMAGES:-}" ]; then
     read -r -a PREPULL_IMAGES <<< "$E2E_PREPULL_IMAGES"
   else
@@ -96,20 +101,27 @@ if [ "${E2E_SKIP_PREPULL:-0}" != "1" ]; then
 
   if [ "${#PREPULL_IMAGES[@]}" -gt 0 ]; then
     echo "Pre-pulling common images..."
+    PREPULL_FAILED=0
     for image in "${PREPULL_IMAGES[@]}"; do
       pulled=0
-      for attempt in 1 2 3; do
+      for attempt in $(seq 1 "$PREPULL_RETRIES"); do
         if docker pull "$image" > /dev/null 2>&1; then
           pulled=1
           break
         fi
-        sleep 2
+        sleep "$PREPULL_BACKOFF_SEC"
       done
       if [ "$pulled" -ne 1 ]; then
-        echo "Error: failed to pull image '$image' after 3 attempts"
-        exit 1
+        echo "Warning: failed to pre-pull image '$image' after $PREPULL_RETRIES attempts"
+        PREPULL_FAILED=1
       fi
     done
+
+    if [ "$PREPULL_FAILED" -eq 1 ] && [ "$PREPULL_STRICT" = "1" ]; then
+      echo "Error: pre-pull failed and E2E_PREPULL_STRICT=1"
+      exit 1
+    fi
+
     echo "✓ Image pre-pull complete"
   fi
 fi
@@ -204,6 +216,7 @@ if [ -n "$GROUP_LIST" ]; then
 else
   echo "Running $TOTAL test groups (batch size: $BATCH_SIZE, glob: $GROUP_GLOB)"
 fi
+echo "Start stagger: ${START_STAGGER_SEC}s"
 echo "Data dir: $FROST_DATA_DIR"
 echo ""
 
@@ -227,7 +240,9 @@ for ((i=0; i<TOTAL; i+=BATCH_SIZE)); do
     START_TIMES+=("$(date +%s)")
     "$group" &
     PIDS+=($!)
-    sleep 2
+    if [ "$START_STAGGER_SEC" -gt 0 ] && [ "$j" -lt $((END - 1)) ]; then
+      sleep "$START_STAGGER_SEC"
+    fi
   done
 
   for k in "${!PIDS[@]}"; do
@@ -235,12 +250,14 @@ for ((i=0; i<TOTAL; i+=BATCH_SIZE)); do
     GROUP_PATH=${GROUP_PATHS[$k]}
     GROUP=${GROUP_NAMES[$k]}
     START_TS=${START_TIMES[$k]}
-    END_TS=$(date +%s)
-    DURATION=$((END_TS - START_TS))
     if wait "$PID"; then
+      END_TS=$(date +%s)
+      DURATION=$((END_TS - START_TS))
       echo "✓ $GROUP passed"
       record_result "$GROUP" "passed" "$DURATION" 1
     else
+      END_TS=$(date +%s)
+      DURATION=$((END_TS - START_TS))
       echo "✗ $GROUP FAILED"
       record_result "$GROUP" "failed" "$DURATION" 1
       FAILED=1

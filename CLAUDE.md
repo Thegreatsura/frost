@@ -42,13 +42,17 @@ Run locally (fully managed, recommended):
 ```bash
 bun run e2e:local                       # boots isolated local Frost + runs all groups
 E2E_GROUP_GLOB='group-0[1-4]*.sh' bun run e2e:local  # run subset
+E2E_START_STAGGER_SEC=0 bun run e2e:local  # disable between-group launch delay
 E2E_RETRY_FAILED=1 bun run e2e:local    # auto-retry failed groups once
 E2E_REPORT_PATH=/tmp/frost-e2e.json bun run e2e:local # write JSON report
 bun run e2e:smoke                       # fast high-signal subset
 bun run e2e:smoke:retry                 # smoke subset + retry failed groups
 bun run e2e:changed                     # auto-select groups based on git changes
 bun run e2e:changed:retry               # changed groups + retry failed groups
+bun run e2e:changed:fast                # changed groups + retry + JSON report
 bun run e2e:changed:print               # print selected groups only
+bun run e2e:profile:week1               # baseline harness: full + individual + CI step timings
+bun run e2e:soak:week1                  # stability soak matrix (full + individual + top slow groups)
 ```
 
 Run against an existing local Frost instance (start `bun run dev` first):
@@ -57,6 +61,8 @@ bun run e2e:local:existing <api-key>          # run all tests
 bun run e2e:local:existing <api-key> 2        # custom batch size
 FROST_PORT=3301 bun run e2e:local:existing <api-key> # custom port
 E2E_GROUPS='01-basic,23-change-password' bun run e2e:local:existing <api-key>  # explicit groups
+E2E_START_STAGGER_SEC=0 bun run e2e:local:existing <api-key> # disable launch delay
+E2E_BATCH_SIZE=4 bun run e2e:local:existing <api-key>        # shared batch-size env knob
 
 # run single test
 SERVER_IP=localhost API_KEY=<key> E2E_LOCAL=1 FROST_DATA_DIR=./apps/app/data \
@@ -66,7 +72,25 @@ SERVER_IP=localhost API_KEY=<key> E2E_LOCAL=1 FROST_DATA_DIR=./apps/app/data \
 Run against remote VPS:
 ```bash
 ./apps/app/scripts/e2e-test.sh <ip> <api-key>
+E2E_GROUPS='01-basic,10-race,29-mcp' ./apps/app/scripts/e2e-test.sh <ip> <api-key> # explicit groups
+E2E_START_STAGGER_SEC=0 ./apps/app/scripts/e2e-test.sh <ip> <api-key>                # max speed
 ```
+
+Script knobs (standardized):
+- `E2E_GROUPS` - comma-separated explicit groups (e.g. `01-basic,28-oauth`)
+- `E2E_GROUP_GLOB` - shell glob for group files (default: `group-*.sh`)
+- `E2E_START_STAGGER_SEC` - delay between group starts in a batch
+- `E2E_BATCH_SIZE` - groups per batch (CI defaults to 4)
+
+Image-pull resiliency knobs:
+- `FROST_IMAGE_PULL_RETRIES` (default `3`)
+- `FROST_IMAGE_PULL_BACKOFF_MS` (default `2000`)
+- `FROST_IMAGE_PULL_MAX_BACKOFF_MS` (default `10000`)
+
+Troubleshooting transient pull flakes:
+- If logs contain `context deadline exceeded`, `i/o timeout`, or `proxyconnect tcp`, treat as infra/transient first.
+- Re-run with retries enabled (default runtime pull retries are already on).
+- For local runs, keep pre-pull enabled and avoid over-aggressive parallelism (`E2E_START_STAGGER_SEC=1`).
 
 E2E tests run automatically via GitHub Actions on PRs.
 
