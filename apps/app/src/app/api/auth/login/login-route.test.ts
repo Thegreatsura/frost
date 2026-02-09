@@ -27,7 +27,16 @@ const authState: AuthState = {
 
 const cookieCalls: CookieCall[] = [];
 const jsonCalls: JsonCall[] = [];
-const originalNodeEnv = process.env.NODE_ENV;
+const env = process.env as Record<string, string | undefined>;
+const originalNodeEnv = env.NODE_ENV;
+
+function setNodeEnv(value: string | undefined) {
+  if (value === undefined) {
+    delete env.NODE_ENV;
+    return;
+  }
+  env.NODE_ENV = value;
+}
 
 function resetState() {
   authState.hash = "stored-hash";
@@ -106,11 +115,7 @@ async function callLoginRouteWithBody(body: Record<string, unknown>) {
 
 afterEach(function () {
   resetState();
-  if (originalNodeEnv === undefined) {
-    delete process.env.NODE_ENV;
-  } else {
-    process.env.NODE_ENV = originalNodeEnv;
-  }
+  setNodeEnv(originalNodeEnv);
 });
 
 describe("login route", function () {
@@ -135,7 +140,7 @@ describe("login route", function () {
   });
 
   test("returns 401 when password invalid", async function () {
-    process.env.NODE_ENV = "production";
+    setNodeEnv("production");
     authState.validHash = false;
     authState.validDev = false;
 
@@ -148,7 +153,7 @@ describe("login route", function () {
   });
 
   test("sets secure false in development", async function () {
-    process.env.NODE_ENV = "development";
+    setNodeEnv("development");
     authState.validHash = false;
     authState.validDev = true;
 
@@ -162,7 +167,7 @@ describe("login route", function () {
   });
 
   test("sets secure true and expected options in production", async function () {
-    process.env.NODE_ENV = "production";
+    setNodeEnv("production");
 
     await callLoginRoute();
 

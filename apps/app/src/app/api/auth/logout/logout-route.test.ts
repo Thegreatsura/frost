@@ -13,7 +13,16 @@ type JsonCall = {
 
 const cookieCalls: CookieCall[] = [];
 const jsonCalls: JsonCall[] = [];
-const originalNodeEnv = process.env.NODE_ENV;
+const env = process.env as Record<string, string | undefined>;
+const originalNodeEnv = env.NODE_ENV;
+
+function setNodeEnv(value: string | undefined) {
+  if (value === undefined) {
+    delete env.NODE_ENV;
+    return;
+  }
+  env.NODE_ENV = value;
+}
 
 function resetState() {
   cookieCalls.length = 0;
@@ -50,16 +59,12 @@ async function callLogoutRoute() {
 
 afterEach(function () {
   resetState();
-  if (originalNodeEnv === undefined) {
-    delete process.env.NODE_ENV;
-  } else {
-    process.env.NODE_ENV = originalNodeEnv;
-  }
+  setNodeEnv(originalNodeEnv);
 });
 
 describe("logout route", function () {
   test("clears session cookie with expected options in production", async function () {
-    process.env.NODE_ENV = "production";
+    setNodeEnv("production");
 
     await callLogoutRoute();
 
@@ -80,7 +85,7 @@ describe("logout route", function () {
   });
 
   test("sets secure false outside production", async function () {
-    process.env.NODE_ENV = "development";
+    setNodeEnv("development");
 
     await callLogoutRoute();
 
