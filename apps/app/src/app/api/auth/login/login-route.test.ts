@@ -94,23 +94,28 @@ mock.module("@/lib/auth", function () {
 });
 
 async function callLoginRoute() {
+  return callLoginRouteWithConfig({
+    body: { password: "secret" },
+  });
+}
+
+async function callLoginRouteWithConfig(config: {
+  body: Record<string, unknown>;
+  headers?: HeadersInit;
+  url?: string;
+}) {
   const { POST } = await import("./route");
   return POST(
-    new Request("http://localhost/api/auth/login", {
-      body: JSON.stringify({ password: "secret" }),
+    new Request(config.url ?? "http://localhost/api/auth/login", {
+      body: JSON.stringify(config.body),
+      headers: config.headers,
       method: "POST",
     }),
   );
 }
 
 async function callLoginRouteWithBody(body: Record<string, unknown>) {
-  const { POST } = await import("./route");
-  return POST(
-    new Request("http://localhost/api/auth/login", {
-      body: JSON.stringify(body),
-      method: "POST",
-    }),
-  );
+  return callLoginRouteWithConfig({ body });
 }
 
 afterEach(function () {
@@ -169,7 +174,10 @@ describe("login route", function () {
   test("sets secure true and expected options in production", async function () {
     setNodeEnv("production");
 
-    await callLoginRoute();
+    await callLoginRouteWithConfig({
+      body: { password: "secret" },
+      url: "https://localhost/api/auth/login",
+    });
 
     expect(jsonCalls).toHaveLength(1);
     expect(jsonCalls[0]?.body).toEqual({ success: true });
@@ -185,5 +193,27 @@ describe("login route", function () {
       },
       value: "session-token",
     });
+  });
+
+  test("sets secure false in production over http", async function () {
+    setNodeEnv("production");
+
+    await callLoginRoute();
+
+    expect(cookieCalls).toHaveLength(1);
+    expect(cookieCalls[0]?.options.secure).toBe(false);
+  });
+
+  test("sets secure true when forwarded proto is https", async function () {
+    setNodeEnv("production");
+
+    await callLoginRouteWithConfig({
+      body: { password: "secret" },
+      headers: { "x-forwarded-proto": "https" },
+      url: "http://localhost/api/auth/login",
+    });
+
+    expect(cookieCalls).toHaveLength(1);
+    expect(cookieCalls[0]?.options.secure).toBe(true);
   });
 });

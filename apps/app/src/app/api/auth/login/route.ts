@@ -34,10 +34,13 @@ export async function POST(request: Request) {
 
   const token = createSessionToken();
   const response = NextResponse.json({ success: true });
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+  const isHttpsRequest =
+    forwardedProto === "https" || request.url.startsWith("https://");
 
   response.cookies.set("frost_session", token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV !== "development",
+    secure: process.env.NODE_ENV !== "development" && isHttpsRequest,
     sameSite: "lax",
     maxAge: 7 * 24 * 60 * 60,
     path: "/",
