@@ -118,7 +118,7 @@ export function OgImageContent() {
           }}
         />
         <span style={{ fontSize: "16px", color: "#a3a3a3" }}>
-          Open Source · Self-Hosted
+          Open source
         </span>
       </div>
 
@@ -140,7 +140,7 @@ export function OgImageContent() {
             display: "flex",
           }}
         >
-          Get your app online,
+          Vercel/Railway experience.
         </div>
         <div
           style={{
@@ -152,7 +152,7 @@ export function OgImageContent() {
             display: "flex",
           }}
         >
-          for the AI coding era
+          VPS pricing.
         </div>
       </div>
 
@@ -166,7 +166,7 @@ export function OgImageContent() {
           display: "flex",
         }}
       >
-        Deploy in seconds. No usage fees. Open source.
+        Open source
       </div>
 
       <div

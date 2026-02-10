@@ -102,15 +102,15 @@ export function Install(): React.ReactElement {
             Get Started
           </span>
           <h2 className="text-3xl md:text-4xl font-bold mb-4">
-            Deploy in seconds
+            From prompt to production
           </h2>
         </motion.div>
 
         <div className="flex flex-col gap-6">
           <InstallCard
             icon={Bot}
-            label="Agent"
-            description="Give this to your AI agent"
+            label="AI Agent"
+            description="Give this URL to your AI coding agent"
             command={agentUrl}
             prompt="→"
             copied={copiedAgent}
@@ -135,7 +135,7 @@ export function Install(): React.ReactElement {
           <InstallCard
             icon={Terminal}
             label="Manual"
-            description="Run on your server"
+            description="Run this once on your VPS"
             command={installCommand}
             prompt="$"
             copied={copiedManual}

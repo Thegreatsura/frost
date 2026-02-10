@@ -65,6 +65,35 @@ export type DeploymentStatus =
   | "stopped"
   | "cancelled";
 
+const serviceDeploymentLocks = new Map<string, Promise<void>>();
+
+export async function withServiceDeploymentLock<T>(
+  serviceId: string,
+  task: () => Promise<T>,
+): Promise<T> {
+  const previous = serviceDeploymentLocks.get(serviceId) ?? Promise.resolve();
+  let release = function noop(): void {};
+  const current = new Promise<void>(function onCreate(resolve) {
+    release = function releaseCurrent(): void {
+      resolve();
+    };
+  });
+  const chain = previous.then(function onPreviousDone() {
+    return current;
+  });
+  serviceDeploymentLocks.set(serviceId, chain);
+  await previous;
+
+  try {
+    return await task();
+  } finally {
+    release();
+    if (serviceDeploymentLocks.get(serviceId) === chain) {
+      serviceDeploymentLocks.delete(serviceId);
+    }
+  }
+}
+
 async function updateDeployment(
   id: string,
   updates: {
@@ -81,6 +110,33 @@ async function updateDeployment(
     .set(updates)
     .where("id", "=", id)
     .execute();
+}
+
+async function markDeploymentRunningAndSetCurrentServiceDeployment(
+  deploymentId: string,
+  serviceId: string,
+  containerId: string,
+  hostPort: number,
+): Promise<void> {
+  const finishedAt = Date.now();
+  await db.transaction().execute(async (trx) => {
+    await trx
+      .updateTable("deployments")
+      .set({
+        status: "running",
+        containerId,
+        hostPort,
+        finishedAt,
+      })
+      .where("id", "=", deploymentId)
+      .execute();
+
+    await trx
+      .updateTable("services")
+      .set({ currentDeploymentId: deploymentId })
+      .where("id", "=", serviceId)
+      .execute();
+  });
 }
 
 async function appendLog(
@@ -157,8 +213,80 @@ function parseEnvVars(envVarsJson: string): Record<string, string> {
 }
 
 const MAX_PORT_ATTEMPTS = 10;
+const ACTIVE_PORT_DEPLOYMENT_STATUSES = [
+  "pending",
+  "cloning",
+  "pulling",
+  "building",
+  "deploying",
+  "running",
+] as const;
+
+function getUpdatedRowCount(result: unknown): number {
+  if (!result || typeof result !== "object") return 0;
+  const value = (result as { numUpdatedRows?: number | bigint }).numUpdatedRows;
+  return Number(value ?? 0);
+}
+
+async function tryReserveReplicaPort(
+  replicaId: string,
+  hostPort: number,
+): Promise<boolean> {
+  const result = await db
+    .updateTable("replicas")
+    .set({ hostPort })
+    .where("id", "=", replicaId)
+    .where("status", "=", "pending")
+    .where((eb) =>
+      eb.or([eb("hostPort", "is", null), eb("hostPort", "=", hostPort)]),
+    )
+    .where((eb) =>
+      eb.not(
+        eb.exists(
+          eb
+            .selectFrom("replicas as activeReplicas")
+            .select("activeReplicas.id")
+            .where("activeReplicas.id", "!=", replicaId)
+            .where("activeReplicas.hostPort", "=", hostPort)
+            .where("activeReplicas.status", "in", ["pending", "running"]),
+        ),
+      ),
+    )
+    .where((eb) =>
+      eb.not(
+        eb.exists(
+          eb
+            .selectFrom("deployments as activeDeployments")
+            .select("activeDeployments.id")
+            .where("activeDeployments.hostPort", "=", hostPort)
+            .where(
+              "activeDeployments.status",
+              "in",
+              ACTIVE_PORT_DEPLOYMENT_STATUSES,
+            ),
+        ),
+      ),
+    )
+    .executeTakeFirst();
+
+  return getUpdatedRowCount(result) > 0;
+}
+
+async function releaseReplicaPortReservation(
+  replicaId: string,
+  hostPort: number,
+): Promise<void> {
+  await db
+    .updateTable("replicas")
+    .set({ hostPort: null })
+    .where("id", "=", replicaId)
+    .where("status", "=", "pending")
+    .where("hostPort", "=", hostPort)
+    .execute();
+}
 
 async function runContainerWithPortRetry(
+  replicaId: string,
   options: Omit<RunContainerOptions, "hostPort">,
   onRetry?: (port: number, attempt: number) => Promise<void>,
 ): Promise<{ containerId: string; hostPort: number }> {
@@ -168,11 +296,18 @@ async function runContainerWithPortRetry(
     const hostPort = await getAvailablePort(10000, 20000, triedPorts);
     triedPorts.add(hostPort);
 
+    const reserved = await tryReserveReplicaPort(replicaId, hostPort);
+    if (!reserved) {
+      continue;
+    }
+
     const result = await runContainer({ ...options, hostPort });
 
     if (result.success) {
       return { containerId: result.containerId, hostPort };
     }
+
+    await releaseReplicaPortReservation(replicaId, hostPort);
 
     const error = result.error || "";
     const isRetryable =
@@ -373,6 +508,7 @@ async function startReplicas(
 
       const { containerId: cId, hostPort: hPort } =
         await runContainerWithPortRetry(
+          replica.id,
           {
             imageName: opts.imageName,
             containerPort: opts.containerPort,
@@ -683,7 +819,7 @@ export async function deployProject(projectId: string): Promise<string[]> {
   return results.flat();
 }
 
-export async function deployService(
+async function deployServiceUnlocked(
   serviceId: string,
   options?: DeployOptions,
 ): Promise<string> {
@@ -749,6 +885,15 @@ export async function deployService(
   });
 
   return deploymentId;
+}
+
+export async function deployService(
+  serviceId: string,
+  options?: DeployOptions,
+): Promise<string> {
+  return withServiceDeploymentLock(serviceId, function deployServiceTask() {
+    return deployServiceUnlocked(serviceId, options);
+  });
 }
 
 async function runServiceDeployment(
@@ -1175,18 +1320,12 @@ async function runServiceDeployment(
     );
 
     const firstReplica = startedReplicas[0];
-    await updateDeployment(deploymentId, {
-      status: "running",
-      containerId: firstReplica.containerId,
-      hostPort: firstReplica.hostPort,
-      finishedAt: Date.now(),
-    });
-
-    await db
-      .updateTable("services")
-      .set({ currentDeploymentId: deploymentId })
-      .where("id", "=", service.id)
-      .execute();
+    await markDeploymentRunningAndSetCurrentServiceDeployment(
+      deploymentId,
+      service.id,
+      firstReplica.containerId,
+      firstReplica.hostPort,
+    );
 
     await appendLog(
       deploymentId,
@@ -1354,25 +1493,27 @@ export async function rollbackDeployment(
     throw new Error("Image no longer available");
   }
 
-  await cancelActiveDeployments(service.id, deploymentId);
+  return withServiceDeploymentLock(service.id, async function rollbackTask() {
+    await cancelActiveDeployments(service.id, deploymentId);
 
-  await db
-    .updateTable("deployments")
-    .set({ status: "deploying", trigger: "rollback" })
-    .where("id", "=", deploymentId)
-    .execute();
+    await db
+      .updateTable("deployments")
+      .set({ status: "deploying", trigger: "rollback" })
+      .where("id", "=", deploymentId)
+      .execute();
 
-  runRollbackDeployment(
-    deploymentId,
-    targetDeployment,
-    service,
-    environment,
-    project,
-  ).catch((err) => {
-    console.error("Rollback deployment failed:", err);
+    runRollbackDeployment(
+      deploymentId,
+      targetDeployment,
+      service,
+      environment,
+      project,
+    ).catch((err) => {
+      console.error("Rollback deployment failed:", err);
+    });
+
+    return deploymentId;
   });
-
-  return deploymentId;
 }
 
 async function runRollbackDeployment(
@@ -1463,18 +1604,12 @@ async function runRollbackDeployment(
     );
 
     const firstReplica = startedReplicas[0];
-    await updateDeployment(deploymentId, {
-      status: "running",
-      containerId: firstReplica.containerId,
-      hostPort: firstReplica.hostPort,
-      finishedAt: Date.now(),
-    });
-
-    await db
-      .updateTable("services")
-      .set({ currentDeploymentId: deploymentId })
-      .where("id", "=", service.id)
-      .execute();
+    await markDeploymentRunningAndSetCurrentServiceDeployment(
+      deploymentId,
+      service.id,
+      firstReplica.containerId,
+      firstReplica.hostPort,
+    );
 
     await appendLog(
       deploymentId,

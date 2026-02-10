@@ -41,13 +41,12 @@ export function OpenSourceSection() {
               </div>
 
               <h2 className="text-3xl md:text-4xl font-bold mb-4 text-white">
-                Your server. Your data. Your rules.
+                Open source runtime. No platform markup.
               </h2>
 
               <p className="text-white/50 mb-10 max-w-2xl mx-auto leading-relaxed">
-                Frost is fully open source and runs on your own infrastructure.
-                No vendor lock-in. No usage limits. No surprise bills. Just
-                Docker on a server you control.
+                Your apps run on your server. Frost gives your AI coding agent
+                a clean deploy workflow.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-3 justify-center">

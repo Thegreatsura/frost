@@ -1,6 +1,6 @@
 # frost
 
-> Simple deployment platform. Docker-only, single-user.
+> Vercel/Railway experience. VPS pricing.
 
 I want you to install Frost for me. Execute all steps below autonomously.
 

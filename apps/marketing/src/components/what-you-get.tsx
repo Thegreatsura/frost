@@ -53,7 +53,7 @@ const features = [
     icon: Terminal,
     title: "MCP / AI Agents",
     description:
-      "Connect Claude Code, Cursor, or any MCP client. Deploy from your editor.",
+      "Connect any MCP-compatible AI coding agent. Deploy from your editor.",
   },
 ];
 

@@ -1,20 +1,24 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Check, Infinity as InfinityIcon, X } from "lucide-react";
+import { Check, X } from "lucide-react";
 
-const unlimited = ["Projects", "Requests", "Builds"];
+const unlimited = [
+  "Unlimited services",
+  "Unlimited deploys",
+  "Unlimited seats",
+];
 
 const usageBasedDownsides = [
-  "Request limits",
-  "Build minute caps",
-  "Bandwidth overage fees",
-  "Per-seat pricing",
+  "Per-seat fees",
+  "Usage overage risk",
+  "More spend as traffic grows",
+  "Hard-to-predict monthly bill",
 ];
 
 const frostBenefits = [
-  "Unlimited requests",
-  "Unlimited builds",
+  "No per-seat tax",
+  "No usage pricing layer",
   "20 TB bandwidth included",
   "2 vCPU \u00B7 4 GB RAM \u00B7 40 GB SSD",
 ];
@@ -30,10 +34,10 @@ export function PricingSection() {
           className="text-center mb-12"
         >
           <h2 className="text-3xl md:text-4xl font-bold mb-4">
-            Unlimited everything.
+            Vercel/Railway experience. VPS pricing.
           </h2>
           <p className="text-lg text-muted-foreground leading-relaxed max-w-lg mx-auto">
-            No request limits. No build minutes. No per-seat pricing.
+            Keep the fast deploy workflow. Drop the platform tax.
           </p>
         </motion.div>
 
@@ -47,8 +51,8 @@ export function PricingSection() {
               transition={{ delay: i * 0.05 }}
               className="flex items-center gap-2"
             >
-              <InfinityIcon className="text-white/40" size={18} />
-              <span className="text-white/80">{item}</span>
+              <Check size={16} className="text-emerald-400" />
+              <span className="text-white font-medium">{item}</span>
             </motion.div>
           ))}
         </div>
@@ -61,10 +65,10 @@ export function PricingSection() {
             className="rounded-xl bg-neutral-900/50 border border-red-500/20 p-6"
           >
             <div className="text-sm text-red-400/70 uppercase tracking-wide mb-4">
-              Usage-based platforms
+              Vercel / Railway style billing
             </div>
             <div className="text-3xl font-bold text-white/60 mb-4">
-              $50–200+
+              $20+
               <span className="text-lg font-normal text-white/30">/mo</span>
             </div>
             <ul className="space-y-2 text-sm text-white/40">
