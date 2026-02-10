@@ -22,36 +22,24 @@ export function Hero() {
           <FrostLogo size={100} />
         </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.3 }}
-          className="mb-8"
-        >
-          <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-border bg-card/50 text-sm text-muted-foreground backdrop-blur-sm">
-            <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
-            Open Source · Self-Hosted
-          </span>
-        </motion.div>
-
         <motion.h1
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.4 }}
           className="text-5xl md:text-7xl font-bold tracking-tight mb-6 leading-[1.1]"
         >
-          Get your app online,
+          Vercel/Railway experience.
           <br />
-          <span className="text-foreground">for the AI coding era.</span>
+          <span className="text-foreground">VPS pricing.</span>
         </motion.h1>
 
         <motion.p
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.5 }}
-          className="text-lg md:text-xl text-muted-foreground max-w-lg mb-12 leading-relaxed"
+          className="text-lg text-muted-foreground mb-12"
         >
-          Deploy in seconds. No usage fees. Open source.
+          Open source
         </motion.p>
 
         <motion.div
