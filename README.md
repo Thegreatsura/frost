@@ -1,8 +1,8 @@
 # Frost
 
-**Get your app online, for the AI coding era.**
+**Vercel/Railway experience. VPS pricing.**
 
-Open source · Self-hosted · No usage fees
+Open source · Self-hosted
 
 ---
 

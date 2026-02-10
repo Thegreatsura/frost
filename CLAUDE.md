@@ -1,6 +1,6 @@
 # Frost
 
-Simple deployment platform. Docker-only, single-user.
+Vercel/Railway experience. VPS pricing.
 
 See also: `CLAUDE.local.md` for local/personal instructions (gitignored).
 
