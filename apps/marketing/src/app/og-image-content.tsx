@@ -138,7 +138,7 @@ export function OgImageContent() {
             display: "flex",
           }}
         >
-          Vercel/Railway experience.
+          Vercel experience.
         </div>
         <div
           style={{
