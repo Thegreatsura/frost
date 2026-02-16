@@ -1,5 +1,4 @@
 import { ComingSoon } from "@/components/coming-soon";
-import { DemoAccessSection } from "@/components/demo-access-section";
 import { DeployAnything } from "@/components/deploy-anything";
 import { Footer } from "@/components/footer";
 import { Hero } from "@/components/hero";
@@ -19,7 +18,6 @@ export default function Home() {
       <WhatYouGet />
       <OpenSourceSection />
       <ComingSoon />
-      <DemoAccessSection />
       <Install />
       <Footer />
     </main>

@@ -20,6 +20,7 @@ export default function LoginPage() {
   const [demoMode, setDemoMode] = useState(false);
   const [demoPassword, setDemoPassword] = useState<string | null>(null);
   const [devPassword, setDevPassword] = useState<string | null>(null);
+  const [autoFocusEnabled, setAutoFocusEnabled] = useState(false);
 
   useEffect(() => {
     async function loadAuthInfo() {
@@ -47,6 +48,11 @@ export default function LoginPage() {
     }
 
     loadAuthInfo();
+  }, []);
+
+  useEffect(() => {
+    const inIframe = window.self !== window.top;
+    setAutoFocusEnabled(!inIframe);
   }, []);
 
   function handlePasswordChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -100,7 +106,7 @@ export default function LoginPage() {
                   name="password"
                   type={demoMode ? "text" : "password"}
                   required
-                  autoFocus
+                  autoFocus={autoFocusEnabled}
                   value={password}
                   onChange={handlePasswordChange}
                   className="border-neutral-700 bg-neutral-800 text-neutral-100"

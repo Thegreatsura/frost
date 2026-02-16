@@ -5,6 +5,7 @@ import {
   verifyApiToken,
   verifySessionToken,
 } from "./lib/auth";
+import { isDemoMode } from "./lib/demo-mode";
 import { verifyOAuthToken } from "./lib/oauth";
 
 const PUBLIC_PATHS = [
@@ -32,8 +33,23 @@ function isPublicPath(pathname: string): boolean {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isApi = pathname.startsWith("/api/");
+  const demoMode = isDemoMode();
 
   if (isPublicPath(pathname)) {
+    return NextResponse.next();
+  }
+
+  if (demoMode) {
+    const setupComplete = await isSetupComplete();
+    if (!setupComplete) {
+      if (isApi) {
+        return NextResponse.json(
+          { error: "setup not complete" },
+          { status: 503 },
+        );
+      }
+      return NextResponse.redirect(new URL("/setup", request.url));
+    }
     return NextResponse.next();
   }
 
