@@ -7,25 +7,56 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+type AuthInfo = {
+  demoMode?: boolean;
+  demoPassword?: string | null;
+  devPassword?: string | null;
+};
+
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [password, setPassword] = useState("");
+  const [demoMode, setDemoMode] = useState(false);
+  const [demoPassword, setDemoPassword] = useState<string | null>(null);
   const [devPassword, setDevPassword] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/auth/dev-info")
-      .then((res) => res.json())
-      .then((data) => setDevPassword(data.devPassword))
-      .catch(() => {});
+    async function loadAuthInfo() {
+      try {
+        const res = await fetch("/api/auth/dev-info");
+        const data = (await res.json()) as AuthInfo;
+        const fetchedDevPassword =
+          typeof data.devPassword === "string" && data.devPassword.length > 0
+            ? data.devPassword
+            : null;
+        const fetchedDemoPassword =
+          typeof data.demoPassword === "string" && data.demoPassword.length > 0
+            ? data.demoPassword
+            : null;
+        const nextDemoMode = data.demoMode === true;
+
+        setDevPassword(fetchedDevPassword);
+        setDemoMode(nextDemoMode);
+        setDemoPassword(fetchedDemoPassword);
+
+        if (nextDemoMode && fetchedDemoPassword) {
+          setPassword(fetchedDemoPassword);
+        }
+      } catch {}
+    }
+
+    loadAuthInfo();
   }, []);
+
+  function handlePasswordChange(event: React.ChangeEvent<HTMLInputElement>) {
+    setPassword(event.target.value);
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
     setLoading(true);
-
-    const formData = new FormData(e.currentTarget);
-    const password = formData.get("password") as string;
 
     try {
       const res = await fetch("/api/auth/login", {
@@ -67,14 +98,23 @@ export default function LoginPage() {
                 <Input
                   id="password"
                   name="password"
-                  type="password"
+                  type={demoMode ? "text" : "password"}
                   required
                   autoFocus
+                  value={password}
+                  onChange={handlePasswordChange}
                   className="border-neutral-700 bg-neutral-800 text-neutral-100"
                 />
               </div>
 
               {error && <p className="text-sm text-red-400">{error}</p>}
+
+              {demoMode && demoPassword && (
+                <p className="text-sm text-neutral-500">
+                  Demo password:{" "}
+                  <code className="text-neutral-400">{demoPassword}</code>
+                </p>
+              )}
 
               {devPassword && (
                 <p className="text-sm text-neutral-500">

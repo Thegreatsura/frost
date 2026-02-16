@@ -98,10 +98,18 @@ if grep -q '^FROST_DEMO_MODE=' /opt/frost/.env; then
 else
   printf '\nFROST_DEMO_MODE=true\n' >> /opt/frost/.env
 fi
+sed -i '/^DEMO_PASSWORD=/d' /opt/frost/.env
+grep '^DEMO_PASSWORD=' /etc/frost-demo.env >> /opt/frost/.env
 rm -f /tmp/demo-hourly-reset.sh /tmp/frost-demo.env /tmp/frost-demo-reset.service /tmp/frost-demo-reset.timer
 systemctl daemon-reload
 systemctl restart frost
 systemctl enable --now frost-demo-reset.timer
+for _ in $(seq 1 60); do
+  if curl -fsS http://localhost:3000/api/setup > /dev/null 2>&1; then
+    break
+  fi
+  sleep 2
+done
 systemctl start frost-demo-reset.service
 "
 

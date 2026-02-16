@@ -34,11 +34,6 @@ if [ -z "${DEMO_PASSWORD:-}" ]; then
   exit 1
 fi
 
-if [ "${#DEMO_PASSWORD}" -lt 8 ]; then
-  echo "DEMO_PASSWORD must be at least 8 chars"
-  exit 1
-fi
-
 if [ -z "${FROST_JWT_SECRET:-}" ]; then
   echo "missing FROST_JWT_SECRET"
   exit 1
@@ -64,6 +59,11 @@ function db_scalar() {
 function db_exec() {
   local sql="$1"
   DB_PATH="$DB_PATH" SQL="$sql" bun -e 'import { Database } from "bun:sqlite"; const db = new Database(process.env.DB_PATH!); db.exec(process.env.SQL!); db.close();'
+}
+
+function set_admin_password_hash() {
+  local password="$1"
+  DB_PATH="$DB_PATH" PASSWORD="$password" bun -e 'import { Database } from "bun:sqlite"; import { randomBytes, scryptSync } from "node:crypto"; const password = process.env.PASSWORD; if (!password) process.exit(1); const salt = randomBytes(16).toString("hex"); const derived = scryptSync(password, salt, 64).toString("hex"); const hash = `${salt}:${derived}`; const db = new Database(process.env.DB_PATH!); db.run("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ["admin_password_hash", hash]); db.close();'
 }
 
 current_domain="$(db_scalar "SELECT value FROM settings WHERE key = 'domain' LIMIT 1")"
@@ -148,7 +148,7 @@ WHERE key NOT IN (
 "
 
 echo "reapplying demo password"
-(cd /opt/frost && FROST_DATA_DIR="$FROST_DATA_DIR" bun run setup "$DEMO_PASSWORD")
+set_admin_password_hash "$DEMO_PASSWORD"
 
 echo "seeding demo project"
 API_KEY="$(create_api_key "demo-reset-$(date +%s)-phase2")"

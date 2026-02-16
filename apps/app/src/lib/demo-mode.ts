@@ -23,6 +23,15 @@ export function getDemoModeBlockedMessage(target: string): string {
   return `${target} disabled in demo mode`;
 }
 
+export function getDemoPassword(): string | null {
+  if (!isDemoMode()) return null;
+  const raw = process.env.DEMO_PASSWORD;
+  if (!raw) return "demo";
+  const value = raw.trim();
+  if (!value) return "demo";
+  return value;
+}
+
 export function isDemoCpuLimitAllowed(cpuLimit?: number | null): boolean {
   if (cpuLimit === null || cpuLimit === undefined) return true;
   return cpuLimit <= DEMO_MODE_LIMITS.maxCpuLimit;
