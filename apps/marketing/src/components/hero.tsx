@@ -52,24 +52,37 @@ export function Hero() {
           className="space-y-4"
         >
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <a
-              href="#install"
-              className="group inline-flex items-center justify-center gap-2 px-8 py-3 rounded-lg font-medium transition-all bg-white text-background hover:bg-white/90"
-            >
-              Get Started
-              <ArrowRight
-                size={18}
-                className="transition-transform group-hover:translate-x-1"
-              />
-            </a>
-            {demoUrl && (
+            {demoUrl ? (
+              <>
+                <a
+                  href={demoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-white px-8 py-3 font-medium text-background transition-all hover:bg-white/90"
+                >
+                  Try Live Demo
+                </a>
+                <a
+                  href="#install"
+                  className="group inline-flex items-center justify-center gap-2 rounded-lg border border-border px-8 py-3 font-medium text-foreground transition-all hover:bg-card/50"
+                >
+                  Get Started
+                  <ArrowRight
+                    size={18}
+                    className="transition-transform group-hover:translate-x-1"
+                  />
+                </a>
+              </>
+            ) : (
               <a
-                href={demoUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 px-8 py-3 rounded-lg font-medium transition-all border border-border text-foreground hover:bg-card/50"
+                href="#install"
+                className="group inline-flex items-center justify-center gap-2 rounded-lg bg-white px-8 py-3 font-medium text-background transition-all hover:bg-white/90"
               >
-                Try Live Demo
+                Get Started
+                <ArrowRight
+                  size={18}
+                  className="transition-transform group-hover:translate-x-1"
+                />
               </a>
             )}
           </div>
