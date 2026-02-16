@@ -12,6 +12,11 @@ if [ ! -f /etc/frost-demo.env ]; then
   exit 1
 fi
 
+APP_DIR="/opt/frost"
+if [ -f /opt/frost/apps/app/scripts/create-api-key.ts ]; then
+  APP_DIR="/opt/frost/apps/app"
+fi
+
 set -a
 source /etc/frost-demo.env
 set +a
@@ -74,7 +79,7 @@ fi
 
 function create_api_key() {
   local name="$1"
-  (cd /opt/frost && FROST_JWT_SECRET="$FROST_JWT_SECRET" FROST_DATA_DIR="$FROST_DATA_DIR" bun scripts/create-api-key.ts "$name")
+  (cd "$APP_DIR" && FROST_JWT_SECRET="$FROST_JWT_SECRET" FROST_DATA_DIR="$FROST_DATA_DIR" bun scripts/create-api-key.ts "$name")
 }
 
 API_KEY=""

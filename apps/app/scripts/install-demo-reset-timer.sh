@@ -104,7 +104,7 @@ rm -f /tmp/demo-hourly-reset.sh /tmp/frost-demo.env /tmp/frost-demo-reset.servic
 systemctl daemon-reload
 systemctl restart frost
 systemctl enable --now frost-demo-reset.timer
-for _ in $(seq 1 60); do
+for _ in \$(seq 1 60); do
   if curl -fsS http://localhost:3000/api/setup > /dev/null 2>&1; then
     break
   fi
