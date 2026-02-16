@@ -19,6 +19,10 @@ WORKDIR /app/apps/app
 RUN bun run scripts/generate-openapi.ts /tmp/openapi.json
 
 FROM base AS builder
+ARG NEXT_PUBLIC_DEMO_URL
+ARG NEXT_PUBLIC_DEMO_PASSWORD
+ENV NEXT_PUBLIC_DEMO_URL=$NEXT_PUBLIC_DEMO_URL
+ENV NEXT_PUBLIC_DEMO_PASSWORD=$NEXT_PUBLIC_DEMO_PASSWORD
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/marketing/node_modules ./apps/marketing/node_modules
 COPY apps/marketing ./apps/marketing
