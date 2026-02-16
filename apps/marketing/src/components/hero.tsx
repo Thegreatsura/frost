@@ -5,8 +5,7 @@ import { motion } from "framer-motion";
 export function Hero() {
   const demoUrl =
     process.env.NEXT_PUBLIC_DEMO_URL || "https://demo.frost.build";
-  const demoAppUrl =
-    demoUrl.endsWith("/") ? demoUrl.slice(0, -1) : demoUrl;
+  const demoAppUrl = demoUrl.endsWith("/") ? demoUrl.slice(0, -1) : demoUrl;
 
   return (
     <section className="relative min-h-screen flex flex-col items-center justify-center px-6 overflow-hidden pt-28">
@@ -35,7 +34,6 @@ export function Hero() {
         >
           Build, deploy, and run from one open-source platform.
         </motion.p>
-
       </motion.div>
 
       <motion.div
@@ -76,7 +74,6 @@ export function Hero() {
       >
         <div className="h-px bg-gradient-to-r from-transparent via-border to-transparent opacity-80" />
       </motion.div>
-
     </section>
   );
 }
