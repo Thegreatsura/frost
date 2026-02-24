@@ -78,29 +78,35 @@ PROJECT_ID=$(require_field "$PROJECT" '.id' "create project") || fail "Failed: $
 ENV_ID=$(get_default_environment "$PROJECT_ID") || fail "Failed to get environment"
 log "Using environment: $ENV_ID"
 
-log "Adding postgres from template..."
-DB_SERVICE=$(api -X POST "$BASE_URL/api/environments/$ENV_ID/services" \
-  -d '{"name":"postgres","deployType":"database","templateId":"postgres"}')
-DB_SERVICE_ID=$(require_field "$DB_SERVICE" '.id' "create postgres") || fail "Failed: $DB_SERVICE"
+log "Creating postgres database..."
+DB_CREATE=$(api -X POST "$BASE_URL/api/projects/$PROJECT_ID/databases" \
+  -d '{"name":"postgres","engine":"postgres"}')
+DB_ID=$(require_field "$DB_CREATE" '.database.id' "create postgres database") || fail "Failed: $DB_CREATE"
+DB_TARGET_ID=$(require_field "$DB_CREATE" '.target.id' "create postgres target") || fail "Failed: $DB_CREATE"
 
 log "Extracting postgres credentials..."
-DB_ENVVARS=$(json_get "$DB_SERVICE" '.envVars')
-PG_USER=$(echo "$DB_ENVVARS" | jq -r '.[] | select(.key == "POSTGRES_USER") | .value')
-PG_PASS=$(echo "$DB_ENVVARS" | jq -r '.[] | select(.key == "POSTGRES_PASSWORD") | .value')
-PG_DB=$(echo "$DB_ENVVARS" | jq -r '.[] | select(.key == "POSTGRES_DB") | .value')
+PROVIDER_REF=$(json_get "$DB_CREATE" '.target.providerRefJson')
+PG_USER=$(echo "$PROVIDER_REF" | jq -r 'def decode: if type=="string" then (try (fromjson | decode) catch .) else . end; (decode.username // empty)')
+PG_PASS=$(echo "$PROVIDER_REF" | jq -r 'def decode: if type=="string" then (try (fromjson | decode) catch .) else . end; (decode.password // empty)')
+PG_DB=$(echo "$PROVIDER_REF" | jq -r 'def decode: if type=="string" then (try (fromjson | decode) catch .) else . end; (decode.database // empty)')
 [ -z "$PG_PASS" ] && fail "POSTGRES_PASSWORD not generated"
 log "Credentials generated (pw length: ${#PG_PASS})"
 
-log "Waiting for postgres..."
-DB_DEPLOY_ID=$(wait_for_service_deployment_id "$DB_SERVICE_ID" 45 1) || fail "No deployment found for postgres service"
-wait_for_deployment "$DB_DEPLOY_ID" 90 || fail "postgres deployment failed"
-
-log "Verifying postgres is ready..."
-DB_DEPLOY=$(api "$BASE_URL/api/deployments/$DB_DEPLOY_ID")
-DB_HOST_PORT=$(require_field "$DB_DEPLOY" '.hostPort' "get db hostPort") || fail "No hostPort"
-DB_CONTAINER_ID=$(json_get "$DB_DEPLOY" '.containerId')
+log "Waiting for postgres runtime..."
+DB_RUNTIME="{}"
+DB_HOST_PORT=""
+for _ in $(seq 1 60); do
+  DB_RUNTIME=$(api "$BASE_URL/api/database-targets/$DB_TARGET_ID/runtime")
+  DB_HOST_PORT=$(echo "$DB_RUNTIME" | jq -r '.hostPort // empty')
+  if [ -n "$DB_HOST_PORT" ] && [ "$DB_HOST_PORT" != "null" ]; then
+    break
+  fi
+  sleep 1
+done
+[ -z "$DB_HOST_PORT" ] && fail "No postgres runtime host port: $DB_RUNTIME"
+DB_CONTAINER_ID=$(require_field "$DB_RUNTIME" '.containerName' "get db container") || fail "No db container"
 log "Postgres container: $DB_CONTAINER_ID"
-PG_READY=$(remote "timeout 30 bash -c 'until pg_isready -h localhost -p $DB_HOST_PORT; do sleep 1; done' && echo 'ready'" 2>&1 || echo "not ready")
+PG_READY=$(remote "timeout 30 bash -c 'until pg_isready -h localhost -p $DB_HOST_PORT -U $PG_USER -d $PG_DB; do sleep 1; done' && echo 'ready'" 2>&1 || echo "not ready")
 echo "$PG_READY" | grep -q "ready" || fail "postgres not ready"
 log "postgres ready on port $DB_HOST_PORT"
 
@@ -187,67 +193,23 @@ log "Services on shared network: $NETWORK_NAME"
 log "Cleanup..."
 api -X DELETE "$BASE_URL/api/projects/$PROJECT_ID" > /dev/null
 
-log "=== Project Template with Wildcard Domains ==="
+log "=== Project Template Restrictions ==="
 
-log "Creating project from wordpress template..."
-PROJECT=$(api -X POST "$BASE_URL/api/projects" -d '{"name":"e2e-proj-template","templateId":"wordpress"}')
-PROJECT_ID=$(require_field "$PROJECT" '.id' "create project") || fail "Failed: $PROJECT"
-
-ENV_ID=$(get_default_environment "$PROJECT_ID") || fail "Failed to get environment"
-log "Using environment: $ENV_ID"
-
-log "Fetching services created by template..."
-SERVICES=$(api "$BASE_URL/api/environments/$ENV_ID")
-SERVICE_COUNT=$(json_get "$SERVICES" '.services | length')
-[ "$SERVICE_COUNT" -lt 1 ] && fail "Expected at least 1 service from template, got: $SERVICE_COUNT"
-log "Template created $SERVICE_COUNT services"
-
-log "Checking wildcard domains for app services..."
-WORDPRESS_SERVICE_ID=$(json_get "$SERVICES" '.services[] | select(.name == "wordpress") | .id')
-[ -z "$WORDPRESS_SERVICE_ID" ] && fail "wordpress service not found"
-log "Found wordpress service: $WORDPRESS_SERVICE_ID"
-
-DOMAINS=$(api "$BASE_URL/api/services/$WORDPRESS_SERVICE_ID/domains")
-DOMAIN_COUNT=$(echo "$DOMAINS" | jq 'length')
-log "Wordpress service has $DOMAIN_COUNT domains"
-
-if [ "$DOMAIN_COUNT" -lt 1 ]; then
-  log "WARNING: No wildcard domain created for wordpress service"
-  log "This may be expected in development mode (NODE_ENV=development)"
-else
-  WILDCARD_DOMAIN=$(echo "$DOMAINS" | jq -r '.[0].domain')
-  log "Wildcard domain created: $WILDCARD_DOMAIN"
-  echo "$WILDCARD_DOMAIN" | grep -q "wordpress" || fail "Expected domain to contain 'wordpress': $WILDCARD_DOMAIN"
-fi
-
-log "Verifying database service does NOT have wildcard domain..."
-MARIADB_SERVICE_ID=$(json_get "$SERVICES" '.services[] | select(.name == "mariadb") | .id')
-if [ -n "$MARIADB_SERVICE_ID" ] && [ "$MARIADB_SERVICE_ID" != "null" ]; then
-  DB_DOMAINS=$(api "$BASE_URL/api/services/$MARIADB_SERVICE_ID/domains")
-  DB_DOMAIN_COUNT=$(echo "$DB_DOMAINS" | jq 'length')
-  [ "$DB_DOMAIN_COUNT" -gt 0 ] && fail "Database service should not have wildcard domain, found: $DB_DOMAIN_COUNT"
-  log "Database service correctly has no wildcard domain"
-fi
-
-log "Cleanup project template test..."
-api -X DELETE "$BASE_URL/api/projects/$PROJECT_ID" > /dev/null
+log "Verifying wordpress project template is rejected..."
+WORDPRESS_TEMPLATE_RESP=$(api -X POST "$BASE_URL/api/projects" -d '{"name":"e2e-proj-template","templateId":"wordpress"}')
+WORDPRESS_TEMPLATE_ID=$(echo "$WORDPRESS_TEMPLATE_RESP" | jq -r '.id // empty')
+[ -z "$WORDPRESS_TEMPLATE_ID" ] || fail "Wordpress template should not create a project: $WORDPRESS_TEMPLATE_RESP"
+echo "$WORDPRESS_TEMPLATE_RESP" | grep -qi "not supported\|database services" || fail "Expected unsupported template error: $WORDPRESS_TEMPLATE_RESP"
+log "Wordpress template correctly rejected"
 
 log "=== Edge Cases ==="
 
 log "Testing invalid template ID..."
-PROJECT=$(api -X POST "$BASE_URL/api/projects" -d '{"name":"e2e-invalid-template"}')
-PROJECT_ID=$(require_field "$PROJECT" '.id' "create project") || fail "Failed: $PROJECT"
-
-ENV_ID=$(get_default_environment "$PROJECT_ID") || fail "Failed to get environment"
-log "Using environment: $ENV_ID"
-
-INVALID_RESP=$(curl -sf -X POST "$BASE_URL/api/environments/$ENV_ID/services" \
+INVALID_RESP=$(curl -sf -X POST "$BASE_URL/api/projects" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $API_KEY" \
-  -d '{"name":"test","deployType":"database","templateId":"nonexistent"}' 2>&1 || echo '{"error":"expected"}')
+  -d '{"name":"e2e-invalid-template","templateId":"nonexistent"}' 2>&1 || echo '{"error":"expected"}')
 echo "$INVALID_RESP" | grep -qi "unknown\|error\|not found" || fail "Expected error for invalid template: $INVALID_RESP"
 log "Invalid template correctly rejected"
-
-api -X DELETE "$BASE_URL/api/projects/$PROJECT_ID" > /dev/null
 
 pass

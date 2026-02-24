@@ -7,6 +7,7 @@ import { nanoid } from "nanoid";
 import { getSetting } from "./auth";
 import { emitBuildLogChunk } from "./build-log-stream";
 import { decrypt } from "./crypto";
+import { resolveServiceDatabaseEnvVars } from "./database-runtime";
 import { db } from "./db";
 import type { Environments, Projects, Registries, Services } from "./db-types";
 import {
@@ -145,6 +146,38 @@ async function markDeploymentFailedAndRestoreCurrentServiceDeployment(
   previousDeploymentId: string | null,
   errorMessage: string,
 ): Promise<void> {
+  const deployment = await db
+    .selectFrom("deployments")
+    .select("containerId")
+    .where("id", "=", deploymentId)
+    .executeTakeFirst();
+
+  const replicas = await db
+    .selectFrom("replicas")
+    .select("containerId")
+    .where("deploymentId", "=", deploymentId)
+    .where("containerId", "is not", null)
+    .execute();
+
+  const containerIds = new Set<string>();
+  if (deployment?.containerId) {
+    containerIds.add(deployment.containerId);
+  }
+  for (const replica of replicas) {
+    if (replica.containerId) {
+      containerIds.add(replica.containerId);
+    }
+  }
+
+  for (const containerId of containerIds) {
+    await stopContainer(containerId);
+  }
+
+  await db
+    .updateTable("replicas")
+    .set({ status: "stopped" })
+    .where("deploymentId", "=", deploymentId)
+    .execute();
   const finishedAt = Date.now();
   await db.transaction().execute(async function onFail(trx) {
     await trx
@@ -1034,7 +1067,11 @@ async function runServiceDeployment(
 
   const projectEnvVars = parseEnvVars(project.envVars);
   const serviceEnvVars = parseEnvVars(service.envVars);
-  const envVars = { ...projectEnvVars, ...serviceEnvVars };
+  const bindingEnvVars = await resolveServiceDatabaseEnvVars({
+    serviceId: service.id,
+    environmentId: environment.id,
+  });
+  const envVars = { ...projectEnvVars, ...serviceEnvVars, ...bindingEnvVars };
   const envVarsList: EnvVar[] = Object.entries(envVars).map(([key, value]) => ({
     key,
     value,
@@ -1677,6 +1714,11 @@ async function runRollbackDeployment(
     ? JSON.parse(sourceDeployment.envVarsSnapshot)
     : [];
   const envVars = Object.fromEntries(envVarsList.map((e) => [e.key, e.value]));
+  const bindingEnvVars = await resolveServiceDatabaseEnvVars({
+    serviceId: service.id,
+    environmentId: environment.id,
+  });
+  const runtimeEnvBase = { ...envVars, ...bindingEnvVars };
 
   try {
     await appendLog(
@@ -1699,7 +1741,7 @@ async function runRollbackDeployment(
       project,
       gitInfo,
     );
-    const runtimeEnvVars = { ...frostEnvVars, ...envVars };
+    const runtimeEnvVars = { ...frostEnvVars, ...runtimeEnvBase };
 
     if (!sourceDeployment.imageName) {
       throw new Error("Source deployment has no image");

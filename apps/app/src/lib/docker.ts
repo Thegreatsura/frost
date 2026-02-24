@@ -518,6 +518,10 @@ export async function gracefulStopContainer(
   }
 }
 
+export async function startContainer(name: string): Promise<void> {
+  await execAsync(`docker start ${shellEscape(name)}`);
+}
+
 export async function getContainerStatus(containerId: string): Promise<string> {
   try {
     const { stdout } = await execAsync(
@@ -722,6 +726,52 @@ export async function removeNetwork(name: string): Promise<void> {
     await execAsync(`docker network rm ${shellEscape(name)}`);
   } catch {
     // Network might not exist or have containers attached
+  }
+}
+
+export async function connectContainerToNetwork(
+  containerName: string,
+  networkName: string,
+  aliases: string[] = [],
+): Promise<void> {
+  const args = ["network", "connect"];
+  for (const alias of aliases) {
+    args.push("--alias", alias);
+  }
+  args.push(networkName, containerName);
+  try {
+    await execAsync(`docker ${args.map(shellEscape).join(" ")}`);
+  } catch (err) {
+    if (
+      !(
+        err instanceof Error &&
+        (err.message.includes("already exists in network") ||
+          err.message.includes("is already connected to network"))
+      )
+    ) {
+      throw err;
+    }
+  }
+}
+
+export async function disconnectContainerFromNetwork(
+  containerName: string,
+  networkName: string,
+): Promise<void> {
+  try {
+    await execAsync(
+      `docker network disconnect ${shellEscape(networkName)} ${shellEscape(containerName)}`,
+    );
+  } catch (err) {
+    if (
+      !(
+        err instanceof Error &&
+        (err.message.includes("is not connected") ||
+          err.message.includes("No such container"))
+      )
+    ) {
+      throw err;
+    }
   }
 }
 

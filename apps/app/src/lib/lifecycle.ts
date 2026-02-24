@@ -1,3 +1,4 @@
+import { cleanupEnvironmentAttachments } from "./database-runtime";
 import { db } from "./db";
 import { removeNetwork, stopContainer, stopContainersByLabel } from "./docker";
 import { syncCaddyConfig } from "./domains";
@@ -86,6 +87,8 @@ export async function cleanupEnvironment(
     await stopServiceContainers(service.id);
     await cleanupServiceResources(service);
   }
+
+  await cleanupEnvironmentAttachments(environment.id);
 
   await removeNetwork(
     `frost-net-${environment.projectId}-${environment.id}`.toLowerCase(),
