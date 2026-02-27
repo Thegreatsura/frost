@@ -185,9 +185,27 @@ jobs:
           echo "Installing from: $INSTALL_URL"
           echo "Using branch: $BRANCH"
 
-          ssh -o ServerAliveInterval=30 root@${{ steps.server.outputs.ip }} "curl -fsSL '$INSTALL_URL' -o /tmp/install.sh && chmod +x /tmp/install.sh && /tmp/install.sh -b '$BRANCH' --create-api-key" 2>&1 | tee /tmp/install-output.txt
+          ssh root@${{ steps.server.outputs.ip }} "systemctl stop apt-daily.service apt-daily-upgrade.service unattended-upgrades.service >/dev/null 2>&1 || true"
 
-          API_KEY=$(cat /tmp/install-output.txt | sed 's/\x1b\[[0-9;]*m//g' | grep "API Key:" | awk '{print $3}')
+          API_KEY=""
+          for attempt in 1 2 3 4; do
+            echo "Install attempt $attempt/4"
+            ssh -o ServerAliveInterval=30 root@${{ steps.server.outputs.ip }} "curl -fsSL '$INSTALL_URL' -o /tmp/install.sh && chmod +x /tmp/install.sh && /tmp/install.sh -b '$BRANCH' --create-api-key" 2>&1 | tee /tmp/install-output.txt || true
+
+            API_KEY=$(cat /tmp/install-output.txt | sed 's/\x1b\[[0-9;]*m//g' | grep "API Key:" | awk '{print $3}')
+            if [ -n "$API_KEY" ]; then
+              break
+            fi
+
+            if cat /tmp/install-output.txt | sed 's/\x1b\[[0-9;]*m//g' | grep -Eq "Could not get lock /var/lib/dpkg/lock-frontend|Unable to acquire the dpkg frontend lock|unattended-upgr"; then
+              sleep_sec=$((attempt * 10))
+              echo "dpkg lock detected, retrying in ${sleep_sec}s..."
+              sleep "$sleep_sec"
+              continue
+            fi
+
+            break
+          done
 
           if [ -z "$API_KEY" ]; then
             echo "Failed to extract API key"
@@ -219,6 +237,68 @@ jobs:
           done
           echo "Frost failed to start"
           ssh root@${{ steps.server.outputs.ip }} "journalctl -u frost --no-pager -n 50" || true
+          exit 1
+
+      - name: Setup ZFS branching backend
+        run: |
+          ssh root@${{ steps.server.outputs.ip }} '
+            set -euo pipefail
+
+            if ! command -v zfs >/dev/null 2>&1 || ! command -v zpool >/dev/null 2>&1; then
+              apt-get update -qq
+              apt-get install -y -qq zfsutils-linux
+            fi
+
+            LOOPBACK_FILE=/opt/frost/data/zfs-loopback.img
+            POOL_NAME=frostpool
+            DATASET_BASE=frost/databases
+            MOUNT_BASE=/opt/frost/data/postgres/zfs
+
+            mkdir -p /opt/frost/data
+            mkdir -p "$MOUNT_BASE"
+
+            if [ ! -f "$LOOPBACK_FILE" ]; then
+              truncate -s 8G "$LOOPBACK_FILE"
+            fi
+
+            if ! zpool list -H -o name "$POOL_NAME" >/dev/null 2>&1; then
+              zpool create -f "$POOL_NAME" "$LOOPBACK_FILE"
+            fi
+
+            if ! zfs list -H "$POOL_NAME/$DATASET_BASE" >/dev/null 2>&1; then
+              zfs create -p "$POOL_NAME/$DATASET_BASE"
+            fi
+
+            if grep -q "^FROST_POSTGRES_ZFS_POOL=" /opt/frost/.env; then
+              sed -i "s|^FROST_POSTGRES_ZFS_POOL=.*|FROST_POSTGRES_ZFS_POOL=$POOL_NAME|" /opt/frost/.env
+            else
+              echo "FROST_POSTGRES_ZFS_POOL=$POOL_NAME" >> /opt/frost/.env
+            fi
+
+            if grep -q "^FROST_POSTGRES_ZFS_DATASET_BASE=" /opt/frost/.env; then
+              sed -i "s|^FROST_POSTGRES_ZFS_DATASET_BASE=.*|FROST_POSTGRES_ZFS_DATASET_BASE=$DATASET_BASE|" /opt/frost/.env
+            else
+              echo "FROST_POSTGRES_ZFS_DATASET_BASE=$DATASET_BASE" >> /opt/frost/.env
+            fi
+
+            if grep -q "^FROST_POSTGRES_ZFS_MOUNT_BASE=" /opt/frost/.env; then
+              sed -i "s|^FROST_POSTGRES_ZFS_MOUNT_BASE=.*|FROST_POSTGRES_ZFS_MOUNT_BASE=$MOUNT_BASE|" /opt/frost/.env
+            else
+              echo "FROST_POSTGRES_ZFS_MOUNT_BASE=$MOUNT_BASE" >> /opt/frost/.env
+            fi
+
+            systemctl restart frost
+          '
+
+          echo "Waiting for Frost after ZFS setup..."
+          for i in {1..12}; do
+            if curl -sk -o /dev/null -w "%{http_code}" "https://${{ steps.server.outputs.ip }}/api/health" | grep -q "200"; then
+              echo "Frost is ready after ZFS setup"
+              exit 0
+            fi
+            sleep 5
+          done
+          ssh root@${{ steps.server.outputs.ip }} "journalctl -u frost --no-pager -n 80" || true
           exit 1
 
       - name: Run E2E tests
@@ -414,9 +494,27 @@ jobs:
 
           echo "Installing Frost $TAG from: $INSTALL_URL"
 
-          ssh -o ServerAliveInterval=30 root@${{ steps.server.outputs.ip }} "curl -fsSL '$INSTALL_URL' -o /tmp/install.sh && chmod +x /tmp/install.sh && echo '${{ secrets.FROST_TEST_PASSWORD }}' | /tmp/install.sh -v '$TAG' --create-api-key" 2>&1 | tee /tmp/install-output.txt
+          ssh root@${{ steps.server.outputs.ip }} "systemctl stop apt-daily.service apt-daily-upgrade.service unattended-upgrades.service >/dev/null 2>&1 || true"
 
-          API_KEY=$(cat /tmp/install-output.txt | sed 's/\x1b\[[0-9;]*m//g' | grep "API Key:" | awk '{print $3}')
+          API_KEY=""
+          for attempt in 1 2 3 4; do
+            echo "Install attempt $attempt/4"
+            ssh -o ServerAliveInterval=30 root@${{ steps.server.outputs.ip }} "curl -fsSL '$INSTALL_URL' -o /tmp/install.sh && chmod +x /tmp/install.sh && echo '${{ secrets.FROST_TEST_PASSWORD }}' | /tmp/install.sh -v '$TAG' --create-api-key" 2>&1 | tee /tmp/install-output.txt || true
+
+            API_KEY=$(cat /tmp/install-output.txt | sed 's/\x1b\[[0-9;]*m//g' | grep "API Key:" | awk '{print $3}')
+            if [ -n "$API_KEY" ]; then
+              break
+            fi
+
+            if cat /tmp/install-output.txt | sed 's/\x1b\[[0-9;]*m//g' | grep -Eq "Could not get lock /var/lib/dpkg/lock-frontend|Unable to acquire the dpkg frontend lock|unattended-upgr"; then
+              sleep_sec=$((attempt * 10))
+              echo "dpkg lock detected, retrying in ${sleep_sec}s..."
+              sleep "$sleep_sec"
+              continue
+            fi
+
+            break
+          done
 
           if [ -z "$API_KEY" ]; then
             echo "Failed to extract API key"
