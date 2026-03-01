@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useParams, usePathname, useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MainContentHeader } from "@/components/main-content-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { orpc } from "@/lib/orpc-client";
@@ -50,6 +50,7 @@ export default function WorkspaceLayout({
 
   const [createServiceModalOpen, setCreateServiceModalOpen] = useState(false);
   const [createEnvDialogOpen, setCreateEnvDialogOpen] = useState(false);
+  const [createQueryValue, setCreateQueryValue] = useState<string | null>(null);
 
   const { data: environments = [], isLoading: isEnvironmentsLoading } =
     useQuery({
@@ -163,6 +164,53 @@ export default function WorkspaceLayout({
       ? "overflow-hidden bg-neutral-950/20"
       : "overflow-auto p-6",
   );
+  const shouldOpenCreateService = createQueryValue === "service";
+
+  useEffect(
+    function syncCreateQueryValue() {
+      if (typeof window === "undefined") {
+        return;
+      }
+      const currentPathname = window.location.pathname;
+      if (currentPathname !== pathname) {
+        return;
+      }
+      const currentSearchParams = new URLSearchParams(window.location.search);
+      setCreateQueryValue(currentSearchParams.get("create"));
+    },
+    [pathname],
+  );
+
+  useEffect(
+    function syncCreateServiceFromQuery() {
+      if (!isProjectPage || !currentEnvId || !shouldOpenCreateService) {
+        return;
+      }
+      setCreateServiceModalOpen(true);
+    },
+    [currentEnvId, isProjectPage, shouldOpenCreateService],
+  );
+
+  function clearCreateQueryParam() {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const nextParams = new URLSearchParams(window.location.search);
+    if (!nextParams.has("create")) {
+      return;
+    }
+    nextParams.delete("create");
+    const nextQuery = nextParams.toString();
+    setCreateQueryValue(nextParams.get("create"));
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname);
+  }
+
+  function handleCreateServiceModalOpenChange(open: boolean) {
+    setCreateServiceModalOpen(open);
+    if (!open) {
+      clearCreateQueryParam();
+    }
+  }
 
   return (
     <>
@@ -209,7 +257,7 @@ export default function WorkspaceLayout({
           projectId={projectId}
           environmentId={currentEnvId}
           open={createServiceModalOpen}
-          onOpenChange={setCreateServiceModalOpen}
+          onOpenChange={handleCreateServiceModalOpenChange}
           onServiceCreated={function handleServiceCreated(serviceId) {
             router.push(
               `/projects/${projectId}/environments/${currentEnvId}/services/${serviceId}`,

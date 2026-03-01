@@ -2,13 +2,12 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Copy, Loader2, Trash2, X } from "lucide-react";
+import { ChevronLeft, Copy, Loader2, Trash2 } from "lucide-react";
 import { type KeyboardEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { SettingCard } from "@/components/setting-card";
 import { StateTabs } from "@/components/state-tabs";
-import { StatusDot } from "@/components/status-dot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,7 +22,6 @@ import {
 import type { ContractOutputs } from "@/contracts";
 import { useDatabaseTargetLogs } from "@/hooks/use-database-target-logs";
 import {
-  useDatabaseTargetDeployments,
   useDatabaseTargetRuntime,
   useRunDatabaseTargetSql,
 } from "@/hooks/use-databases";
@@ -52,9 +50,8 @@ interface Branch {
   createdAt: number;
 }
 
-type BranchPanelTab =
+export type BranchPanelTab =
   | "overview"
-  | "deployments"
   | "logs"
   | "tables"
   | "sql"
@@ -70,11 +67,15 @@ const BRANCH_SETTINGS_NAV_ITEMS: { id: BranchSettingsTab; label: string }[] = [
 interface DatabaseBranchPanelProps {
   isOpen: boolean;
   onClose: () => void;
+  activeTab: BranchPanelTab;
+  onTabChange: (tab: BranchPanelTab) => void;
   databaseId: string;
   databaseName: string;
   engine: "postgres" | "mysql";
   branch: Branch | null;
   parentBranchName: string | null;
+  onOpenDatabaseSettings?: () => void;
+  onGoToParent?: () => void;
   defaultEnvironmentNames: string[];
   isDefaultInCurrentEnvironment: boolean;
   providerRef: DatabaseProviderRef | null;
@@ -82,7 +83,6 @@ interface DatabaseBranchPanelProps {
   onDeploy: () => Promise<void>;
   onReset: () => Promise<void>;
   onDelete: () => Promise<void>;
-  onSetAsDefaultInEnvironment: () => Promise<void>;
   onSaveSettings: (input: {
     name?: string;
     hostname?: string;
@@ -96,7 +96,6 @@ interface DatabaseBranchPanelProps {
   isDeployPending: boolean;
   isResetPending: boolean;
   isDeletePending: boolean;
-  isSetAsDefaultInEnvironmentPending: boolean;
   isSaveSettingsPending: boolean;
 }
 
@@ -155,11 +154,15 @@ const MEMORY_OPTIONS = [
 export function DatabaseBranchPanel({
   isOpen,
   onClose,
+  activeTab,
+  onTabChange,
   databaseId,
   databaseName,
   engine,
   branch,
   parentBranchName,
+  onOpenDatabaseSettings,
+  onGoToParent,
   defaultEnvironmentNames,
   isDefaultInCurrentEnvironment,
   providerRef,
@@ -167,18 +170,16 @@ export function DatabaseBranchPanel({
   onDeploy,
   onReset,
   onDelete,
-  onSetAsDefaultInEnvironment,
   onSaveSettings,
   isStartPending,
   isDeployPending,
   isResetPending,
   isDeletePending,
-  isSetAsDefaultInEnvironmentPending,
   isSaveSettingsPending,
 }: DatabaseBranchPanelProps) {
-  const [activeTab, setActiveTab] = useState<BranchPanelTab>("overview");
   const [activeSettingsTab, setActiveSettingsTab] =
     useState<BranchSettingsTab>("general");
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [draftBranchName, setDraftBranchName] = useState("");
   const [draftHostname, setDraftHostname] = useState("");
@@ -197,10 +198,6 @@ export function DatabaseBranchPanel({
     databaseId,
     targetId: branch?.id ?? "",
   });
-  const { data: deployments = [] } = useDatabaseTargetDeployments(
-    databaseId,
-    branch?.id ?? "",
-  );
   const { data: runtime } = useDatabaseTargetRuntime(
     databaseId,
     branch?.id ?? "",
@@ -216,8 +213,8 @@ export function DatabaseBranchPanel({
       if (!branch) {
         return;
       }
-      setActiveTab("overview");
       setActiveSettingsTab("general");
+      setResetDialogOpen(false);
       setDeleteDialogOpen(false);
       setDraftBranchName(branch.name);
       setDraftHostname(branch.name);
@@ -375,8 +372,6 @@ export function DatabaseBranchPanel({
   const filteredMemoryOptions = MEMORY_OPTIONS.filter(
     (opt) => !opt.minGB || (hostResources?.totalMemoryGB ?? 0) >= opt.minGB,
   );
-  const isAnyOverviewActionPending =
-    isStartPending || isResetPending || isSetAsDefaultInEnvironmentPending;
   const showSqlTab = engine === "postgres";
   const canRunSql =
     showSqlTab &&
@@ -388,20 +383,15 @@ export function DatabaseBranchPanel({
         { id: "overview", label: "Overview" },
         { id: "tables", label: "Tables" },
         { id: "sql", label: "SQL" },
-        { id: "deployments", label: "Deployments" },
         { id: "logs", label: "Logs" },
         { id: "settings", label: "Settings" },
       ]
     : [
         { id: "overview", label: "Overview" },
-        { id: "deployments", label: "Deployments" },
         { id: "logs", label: "Logs" },
         { id: "settings", label: "Settings" },
       ];
-  const showOverviewActions =
-    branch?.lifecycleStatus !== "active" ||
-    canReset ||
-    !isDefaultInCurrentEnvironment;
+  const showOverviewActions = branch?.lifecycleStatus !== "active";
 
   async function handleRunSql() {
     if (!canRunSql) {
@@ -501,276 +491,231 @@ export function DatabaseBranchPanel({
   const branchContent =
     isOpen && branch ? (
       <div className="flex h-full flex-col">
-        <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h3 className="truncate text-lg font-semibold text-neutral-200">
-                {branch.name}
-              </h3>
-              <StatusDot status={branch.lifecycleStatus} showLabel />
-            </div>
-            <div className="mt-1 flex items-center gap-2 text-xs text-neutral-500">
-              <span>{engine === "postgres" ? "branch" : "instance"}</span>
-              {parentBranchName && (
-                <span>parent branch {parentBranchName}</span>
-              )}
-              <span>created {getTimeAgo(new Date(branch.createdAt))}</span>
+        <div className="sticky top-0 z-20 border-b border-neutral-800 bg-neutral-950/95 backdrop-blur">
+          <div className="px-4 py-3">
+            <div className="min-w-0">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onClose}
+                className="-ml-2 mb-1 h-7 px-2 text-neutral-300 hover:text-neutral-100"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                {databaseName}
+              </Button>
+              <div className="mt-1 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="truncate text-lg font-semibold text-neutral-200">
+                    {branch.name}
+                  </h3>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={function onRestartClick() {
+                      void onDeploy();
+                    }}
+                    className="border-neutral-700 text-neutral-300"
+                    disabled={
+                      isDeployPending || branch.lifecycleStatus !== "active"
+                    }
+                  >
+                    {isDeployPending ? "Restarting..." : "Restart"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={function onRenameClick() {
+                      onTabChange("settings");
+                      setActiveSettingsTab("general");
+                    }}
+                    className="border-neutral-700 text-neutral-300"
+                    disabled={!canRename}
+                  >
+                    Rename
+                  </Button>
+                  {canReset && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={function onResetClick() {
+                        setResetDialogOpen(true);
+                      }}
+                      className="border-neutral-700 text-neutral-300"
+                      disabled={isResetPending}
+                    >
+                      Reset to parent
+                    </Button>
+                  )}
+                  {canDelete && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={function onDeleteClick() {
+                        setDeleteDialogOpen(true);
+                      }}
+                      className="border-red-900 text-red-300 hover:bg-red-950/40 hover:text-red-200"
+                      disabled={isDeletePending}
+                    >
+                      Delete
+                    </Button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={onClose}
-          >
-            <X className="h-4 w-4" />
-          </Button>
         </div>
 
-        <div className="flex h-[calc(100%-57px)] flex-col">
+        <div className="flex min-h-0 flex-1 flex-col">
           <StateTabs
             tabs={branchTabs}
             value={activeTab}
-            onChange={setActiveTab}
+            onChange={onTabChange}
             layoutId="database-branch-panel-tabs"
           />
 
           <div className="flex min-h-0 flex-1 flex-col overflow-auto p-4">
             {activeTab === "overview" && (
-              <div className="space-y-4">
-                <Card className="border-neutral-800 bg-neutral-900">
-                  <CardContent className="space-y-3 p-4 text-sm">
-                    <div className="flex items-center gap-2">
-                      <StatusDot status={branch.lifecycleStatus} showLabel />
-                      <Badge
-                        variant="outline"
-                        className="border-neutral-700 text-neutral-300"
-                      >
-                        {branch.name}
-                      </Badge>
-                    </div>
-                    <div className="text-neutral-300">
-                      Database: {databaseName}
-                    </div>
-                    <div className="text-neutral-500">
-                      Parent branch: {parentBranchName ?? "-"}
-                    </div>
-                    <div className="text-neutral-500">
-                      Default in envs: {defaultEnvironmentNames.length}
-                    </div>
-                    <div className="text-neutral-500">
-                      Created: {getTimeAgo(new Date(branch.createdAt))}
-                    </div>
-                    {runtime && (
-                      <>
-                        <div className="text-neutral-500">
-                          Runtime id: {runtime.runtimeServiceId}
-                        </div>
-                        <div className="text-neutral-500">
-                          Scale to zero:{" "}
-                          {runtime.gatewayEnabled ? "enabled" : "disabled"}
-                        </div>
-                        <div className="text-neutral-500">
-                          Last activity:{" "}
-                          {runtime.lastActivityAt
-                            ? getTimeAgo(new Date(runtime.lastActivityAt))
-                            : "never"}
-                        </div>
-                      </>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {runtime?.runtimeServiceId && (
-                  <RuntimeMetricsCard
-                    runtimeServiceId={runtime.runtimeServiceId}
-                  />
-                )}
-
-                {showOverviewActions && (
+              <div className="mx-auto w-full max-w-[1200px]">
+                <div className="space-y-4">
                   <Card className="border-neutral-800 bg-neutral-900">
-                    <CardContent className="space-y-3 p-4">
-                      <div className="flex flex-wrap gap-2">
-                        {branch.lifecycleStatus !== "active" && (
-                          <Button
-                            variant="outline"
-                            onClick={() => {
-                              void onStart();
-                            }}
-                            disabled={isAnyOverviewActionPending}
-                          >
-                            {isStartPending ? (
-                              <>
-                                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                                Starting...
-                              </>
-                            ) : (
-                              "Start"
+                    <CardContent className="p-4">
+                      <div className="grid gap-4 text-sm md:grid-cols-3">
+                        <div className="space-y-1">
+                          <p className="text-xs uppercase tracking-wide text-neutral-500">
+                            Parent
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-neutral-200">
+                              {parentBranchName ?? "-"}
+                            </span>
+                            {onGoToParent && parentBranchName && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={function onGoToParentClick() {
+                                  onGoToParent();
+                                }}
+                              >
+                                Go to parent
+                              </Button>
                             )}
-                          </Button>
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs uppercase tracking-wide text-neutral-500">
+                            Created
+                          </p>
+                          <p className="text-neutral-200">
+                            {getTimeAgo(new Date(branch.createdAt))}
+                          </p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs uppercase tracking-wide text-neutral-500">
+                            Default in envs
+                          </p>
+                          <p className="text-neutral-200">
+                            {defaultEnvironmentNames.length}
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-neutral-700 bg-neutral-800">
+                    <CardContent className="space-y-4 p-4">
+                      <div>
+                        <p className="mb-1 text-xs text-neutral-500">
+                          Internal connection
+                        </p>
+                        {internalConnectionString ? (
+                          <div className="flex items-start gap-2">
+                            <code className="flex-1 overflow-auto rounded bg-neutral-900 px-3 py-2 font-mono text-xs text-neutral-300">
+                              {internalConnectionString}
+                            </code>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                copyToClipboard(internalConnectionString)
+                              }
+                            >
+                              <Copy className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-neutral-500">
+                            Set this{" "}
+                            {engine === "postgres" ? "branch" : "instance"} as
+                            default in this environment to use the internal
+                            alias.
+                          </p>
                         )}
-                        {canReset && (
-                          <Button
-                            variant="outline"
-                            onClick={() => {
-                              void onReset();
-                            }}
-                            disabled={isAnyOverviewActionPending}
-                          >
-                            {isResetPending ? (
-                              <>
-                                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                                Resetting...
-                              </>
-                            ) : (
-                              "Reset from parent"
-                            )}
-                          </Button>
-                        )}
-                        {!isDefaultInCurrentEnvironment && (
-                          <Button
-                            variant="outline"
-                            onClick={() => {
-                              void onSetAsDefaultInEnvironment();
-                            }}
-                            disabled={isAnyOverviewActionPending}
-                          >
-                            {isSetAsDefaultInEnvironmentPending ? (
-                              <>
-                                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                                Updating...
-                              </>
-                            ) : (
-                              "Set as default for this environment"
-                            )}
-                          </Button>
+                      </div>
+
+                      <div>
+                        <p className="mb-1 text-xs text-neutral-500">
+                          Direct host connection
+                        </p>
+                        {directConnectionString ? (
+                          <div className="flex items-start gap-2">
+                            <code className="flex-1 overflow-auto rounded bg-neutral-900 px-3 py-2 font-mono text-xs text-neutral-300">
+                              {directConnectionString}
+                            </code>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                copyToClipboard(directConnectionString)
+                              }
+                            >
+                              <Copy className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-neutral-500">
+                            Connection details unavailable.
+                          </p>
                         )}
                       </div>
                     </CardContent>
                   </Card>
-                )}
 
-                <Card className="border-neutral-700 bg-neutral-800">
-                  <CardContent className="space-y-4 p-4">
-                    <div>
-                      <p className="mb-1 text-xs text-neutral-500">
-                        Internal connection
-                      </p>
-                      {internalConnectionString ? (
-                        <div className="flex items-start gap-2">
-                          <code className="flex-1 overflow-auto rounded bg-neutral-900 px-3 py-2 font-mono text-xs text-neutral-300">
-                            {internalConnectionString}
-                          </code>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              copyToClipboard(internalConnectionString)
-                            }
-                          >
-                            <Copy className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ) : (
-                        <p className="text-sm text-neutral-500">
-                          Set this{" "}
-                          {engine === "postgres" ? "branch" : "instance"} as
-                          default in this environment to use the internal alias.
-                        </p>
-                      )}
-                    </div>
+                  {runtime?.runtimeServiceId && (
+                    <RuntimeMetricsCard
+                      runtimeServiceId={runtime.runtimeServiceId}
+                    />
+                  )}
 
-                    <div>
-                      <p className="mb-1 text-xs text-neutral-500">
-                        Direct host connection
-                      </p>
-                      {directConnectionString ? (
-                        <div className="flex items-start gap-2">
-                          <code className="flex-1 overflow-auto rounded bg-neutral-900 px-3 py-2 font-mono text-xs text-neutral-300">
-                            {directConnectionString}
-                          </code>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              copyToClipboard(directConnectionString)
-                            }
-                          >
-                            <Copy className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ) : (
-                        <p className="text-sm text-neutral-500">
-                          Connection details unavailable.
-                        </p>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-
-            {activeTab === "deployments" && (
-              <Card className="border-neutral-800 bg-neutral-900">
-                <CardContent className="space-y-3 p-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-neutral-300">
-                      Branch deployments
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        void onDeploy();
-                      }}
-                      disabled={isDeployPending}
-                    >
-                      {isDeployPending ? (
-                        <>
-                          <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                          Redeploying...
-                        </>
-                      ) : (
-                        "Redeploy"
-                      )}
-                    </Button>
-                  </div>
-                  {deployments.length === 0 ? (
-                    <p className="text-sm text-neutral-500">
-                      No deployments yet.
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      {deployments.map((deployment) => (
-                        <div
-                          key={deployment.id}
-                          className="rounded-md border border-neutral-800 bg-neutral-950/40 px-3 py-2"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="text-sm text-neutral-200">
-                              {deployment.action}
-                            </div>
-                            <Badge
+                  {showOverviewActions && (
+                    <Card className="border-neutral-800 bg-neutral-900">
+                      <CardContent className="space-y-3 p-4">
+                        <div className="flex flex-wrap gap-2">
+                          {branch.lifecycleStatus !== "active" && (
+                            <Button
                               variant="outline"
-                              className="border-neutral-700 text-neutral-300"
+                              onClick={() => {
+                                void onStart();
+                              }}
+                              disabled={isStartPending}
                             >
-                              {deployment.status}
-                            </Badge>
-                          </div>
-                          <div className="mt-1 text-xs text-neutral-500">
-                            {getTimeAgo(new Date(deployment.createdAt))}
-                          </div>
-                          {deployment.message && (
-                            <div className="mt-1 text-xs text-neutral-500">
-                              {deployment.message}
-                            </div>
+                              {isStartPending ? (
+                                <>
+                                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                                  Starting...
+                                </>
+                              ) : (
+                                "Start"
+                              )}
+                            </Button>
                           )}
                         </div>
-                      ))}
-                    </div>
+                      </CardContent>
+                    </Card>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             )}
 
             {activeTab === "logs" && (
@@ -949,373 +894,404 @@ export function DatabaseBranchPanel({
             )}
 
             {activeTab === "settings" && (
-              <div className="flex gap-6">
-                <nav className="sticky top-0 self-start w-32 shrink-0 space-y-0.5">
-                  {BRANCH_SETTINGS_NAV_ITEMS.map((item) => (
-                    <button
-                      type="button"
-                      key={item.id}
-                      onClick={() => setActiveSettingsTab(item.id)}
-                      className="relative block w-full rounded-md px-3 py-2 text-left text-sm transition-colors"
-                    >
-                      {activeSettingsTab === item.id && (
-                        <motion.div
-                          layoutId="branch-settings-indicator"
-                          className="absolute inset-0 rounded-md bg-neutral-800/80"
-                          transition={{
-                            type: "spring",
-                            bounce: 0.15,
-                            duration: 0.5,
-                          }}
-                        />
-                      )}
-                      <span
-                        className={
-                          activeSettingsTab === item.id
-                            ? "relative z-10 text-white"
-                            : "relative z-10 text-neutral-400 hover:text-neutral-200"
-                        }
+              <div className="mx-auto w-full max-w-[1200px]">
+                <div className="flex gap-6">
+                  <nav className="sticky top-0 self-start w-32 shrink-0 space-y-0.5">
+                    {BRANCH_SETTINGS_NAV_ITEMS.map((item) => (
+                      <button
+                        type="button"
+                        key={item.id}
+                        onClick={() => setActiveSettingsTab(item.id)}
+                        className="relative block w-full rounded-md px-3 py-2 text-left text-sm transition-colors"
                       >
-                        {item.label}
-                      </span>
-                    </button>
-                  ))}
-                </nav>
-
-                <div className="flex-1 space-y-4">
-                  {activeSettingsTab === "general" && (
-                    <>
-                      <SettingCard
-                        title={`${runtimeUnitCapitalized} Name`}
-                        description={`Rename this ${runtimeUnit}`}
-                        onSubmit={handleSaveBranchName}
-                        footerRight={
-                          <Button
-                            size="sm"
-                            type="submit"
-                            disabled={
-                              !canRename ||
-                              !canSaveBranchName ||
-                              isSaveSettingsPending
-                            }
-                          >
-                            {isSaveSettingsPending ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              "Save"
-                            )}
-                          </Button>
-                        }
-                      >
-                        <div className="space-y-2">
-                          <Input
-                            id="branch-name"
-                            aria-label="Branch name"
-                            value={draftBranchName}
-                            onChange={(event) =>
-                              setDraftBranchName(event.target.value)
-                            }
-                            placeholder="Branch name"
-                            className="border-neutral-700 bg-neutral-800 text-neutral-100"
-                            disabled={isSaveSettingsPending}
+                        {activeSettingsTab === item.id && (
+                          <motion.div
+                            layoutId="branch-settings-indicator"
+                            className="absolute inset-0 rounded-md bg-neutral-800/80"
+                            transition={{
+                              type: "spring",
+                              bounce: 0.15,
+                              duration: 0.5,
+                            }}
                           />
-                          {!canRename && (
-                            <div className="text-xs text-neutral-500">
-                              main cannot be renamed.
-                            </div>
-                          )}
-                        </div>
-                      </SettingCard>
+                        )}
+                        <span
+                          className={
+                            activeSettingsTab === item.id
+                              ? "relative z-10 text-white"
+                              : "relative z-10 text-neutral-400 hover:text-neutral-200"
+                          }
+                        >
+                          {item.label}
+                        </span>
+                      </button>
+                    ))}
+                  </nav>
 
-                      <SettingCard
-                        title="Hostname"
-                        description="DNS-safe identifier for this branch in the project network."
-                        onSubmit={handleSaveHostname}
-                        footerRight={
-                          <Button
-                            size="sm"
-                            type="submit"
-                            disabled={!canSaveHostname || isSaveSettingsPending}
-                          >
-                            {isSaveSettingsPending ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              "Save"
-                            )}
-                          </Button>
-                        }
-                      >
-                        <div className="space-y-4">
-                          <div className="flex items-center rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 focus-within:ring-1 focus-within:ring-neutral-500">
-                            <div className="inline-flex items-center font-mono text-sm">
-                              <input
-                                value={draftHostname}
-                                onChange={(event) =>
-                                  setDraftHostname(
-                                    event.target.value.toLowerCase(),
-                                  )
-                                }
-                                placeholder="<hostname>"
-                                size={Math.max(draftHostname.length, 10) + 1}
-                                className="border-b border-dashed border-neutral-600 bg-transparent text-neutral-100 placeholder:text-neutral-500 focus:border-neutral-400 focus:outline-none"
-                              />
-                              <span className="text-neutral-500">
-                                .frost.internal
-                              </span>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <code className="font-mono text-sm text-neutral-500">
-                              {draftHostname || "<hostname>"}.frost.internal
-                            </code>
+                  <div className="flex-1 space-y-4">
+                    {activeSettingsTab === "general" && (
+                      <>
+                        <SettingCard
+                          title={`${runtimeUnitCapitalized} Name`}
+                          description={`Rename this ${runtimeUnit}`}
+                          onSubmit={handleSaveBranchName}
+                          footerRight={
                             <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 text-neutral-500 hover:text-neutral-300"
-                              onClick={() =>
-                                copyToClipboard(
-                                  `${draftHostname}.frost.internal`,
-                                )
+                              size="sm"
+                              type="submit"
+                              disabled={
+                                !canRename ||
+                                !canSaveBranchName ||
+                                isSaveSettingsPending
                               }
                             >
-                              <Copy className="h-3.5 w-3.5" />
+                              {isSaveSettingsPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                "Save"
+                              )}
                             </Button>
-                          </div>
-                          {nextHostname.length > 0 &&
-                            !hostnamePattern.test(nextHostname) && (
+                          }
+                        >
+                          <div className="space-y-2">
+                            <Input
+                              id="branch-name"
+                              aria-label="Branch name"
+                              value={draftBranchName}
+                              onChange={(event) =>
+                                setDraftBranchName(event.target.value)
+                              }
+                              placeholder="Branch name"
+                              className="border-neutral-700 bg-neutral-800 text-neutral-100"
+                              disabled={isSaveSettingsPending}
+                            />
+                            {!canRename && (
                               <div className="text-xs text-neutral-500">
-                                Use lowercase letters, numbers, and hyphens.
+                                main cannot be renamed.
                               </div>
                             )}
-                        </div>
-                      </SettingCard>
+                          </div>
+                        </SettingCard>
 
-                      <SettingCard
-                        title="Delete Branch"
-                        description={
-                          canDelete
-                            ? `Permanently delete this ${runtimeUnit}`
-                            : "Main cannot be deleted."
-                        }
-                        variant="danger"
-                        footerRight={
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => setDeleteDialogOpen(true)}
-                            disabled={!canDelete || isDeletePending}
-                          >
-                            {isDeletePending ? (
-                              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                            ) : (
-                              <Trash2 className="mr-1 h-4 w-4" />
-                            )}
-                            Delete {runtimeUnitCapitalized}
-                          </Button>
-                        }
-                      >
-                        <div className="text-sm text-neutral-400">
-                          This action cannot be undone.
-                        </div>
-                      </SettingCard>
-                    </>
-                  )}
-
-                  {activeSettingsTab === "runtime" && (
-                    <>
-                      <SettingCard
-                        title="CPU Limit"
-                        description={`Maximum CPU cores this ${runtimeUnit} can use.`}
-                        learnMoreUrl="https://docs.docker.com/config/containers/resource_constraints/#cpu"
-                        learnMoreText="Learn more about CPU Limit"
-                        onSubmit={handleSaveCpuLimit}
-                        footerRight={
-                          <Button
-                            size="sm"
-                            type="submit"
-                            disabled={!canSaveCpuLimit || isSaveSettingsPending}
-                          >
-                            {isSaveSettingsPending ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              "Save"
-                            )}
-                          </Button>
-                        }
-                      >
-                        <Select
-                          value={draftCpuLimit}
-                          onValueChange={setDraftCpuLimit}
+                        <SettingCard
+                          title="Hostname"
+                          description="DNS-safe identifier for this branch in the project network."
+                          onSubmit={handleSaveHostname}
+                          footerRight={
+                            <Button
+                              size="sm"
+                              type="submit"
+                              disabled={
+                                !canSaveHostname || isSaveSettingsPending
+                              }
+                            >
+                              {isSaveSettingsPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                "Save"
+                              )}
+                            </Button>
+                          }
                         >
-                          <SelectTrigger className="w-48">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {filteredCpuOptions.map((option) => (
-                              <SelectItem
-                                key={option.value}
-                                value={option.value}
+                          <div className="space-y-4">
+                            <div className="flex items-center rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 focus-within:ring-1 focus-within:ring-neutral-500">
+                              <div className="inline-flex items-center font-mono text-sm">
+                                <input
+                                  value={draftHostname}
+                                  onChange={(event) =>
+                                    setDraftHostname(
+                                      event.target.value.toLowerCase(),
+                                    )
+                                  }
+                                  placeholder="<hostname>"
+                                  size={Math.max(draftHostname.length, 10) + 1}
+                                  className="border-b border-dashed border-neutral-600 bg-transparent text-neutral-100 placeholder:text-neutral-500 focus:border-neutral-400 focus:outline-none"
+                                />
+                                <span className="text-neutral-500">
+                                  .frost.internal
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <code className="font-mono text-sm text-neutral-500">
+                                {draftHostname || "<hostname>"}.frost.internal
+                              </code>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 text-neutral-500 hover:text-neutral-300"
+                                onClick={() =>
+                                  copyToClipboard(
+                                    `${draftHostname}.frost.internal`,
+                                  )
+                                }
                               >
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </SettingCard>
+                                <Copy className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                            {nextHostname.length > 0 &&
+                              !hostnamePattern.test(nextHostname) && (
+                                <div className="text-xs text-neutral-500">
+                                  Use lowercase letters, numbers, and hyphens.
+                                </div>
+                              )}
+                          </div>
+                        </SettingCard>
 
-                      <SettingCard
-                        title="Memory Limit"
-                        description={`Maximum memory this ${runtimeUnit} can use.`}
-                        learnMoreUrl="https://docs.docker.com/config/containers/resource_constraints/#memory"
-                        learnMoreText="Learn more about Memory Limit"
-                        onSubmit={handleSaveMemoryLimit}
-                        footerRight={
-                          <Button
-                            size="sm"
-                            type="submit"
-                            disabled={
-                              !canSaveMemoryLimit || isSaveSettingsPending
+                        {engine === "postgres" && onOpenDatabaseSettings && (
+                          <SettingCard
+                            title="Backups and Restore"
+                            description="Backups are managed at database level. Open database settings to configure backups and restore."
+                            footerRight={
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="border-neutral-700 text-neutral-300"
+                                onClick={function onOpenDatabaseSettingsClick() {
+                                  onOpenDatabaseSettings();
+                                }}
+                              >
+                                Open Database Settings
+                              </Button>
                             }
                           >
-                            {isSaveSettingsPending ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              "Save"
-                            )}
-                          </Button>
-                        }
-                      >
-                        <Select
-                          value={draftMemoryLimit}
-                          onValueChange={setDraftMemoryLimit}
+                            <div className="text-sm text-neutral-400">
+                              Use this when you need backup schedules or
+                              restore.
+                            </div>
+                          </SettingCard>
+                        )}
+
+                        <SettingCard
+                          title="Delete Branch"
+                          description={
+                            canDelete
+                              ? `Permanently delete this ${runtimeUnit}`
+                              : "Main cannot be deleted."
+                          }
+                          variant="danger"
+                          footerRight={
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => setDeleteDialogOpen(true)}
+                              disabled={!canDelete || isDeletePending}
+                            >
+                              {isDeletePending ? (
+                                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="mr-1 h-4 w-4" />
+                              )}
+                              Delete {runtimeUnitCapitalized}
+                            </Button>
+                          }
                         >
-                          <SelectTrigger className="w-48">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {filteredMemoryOptions.map((option) => (
-                              <SelectItem
-                                key={option.value}
-                                value={option.value}
-                              >
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </SettingCard>
+                          <div className="text-sm text-neutral-400">
+                            This action cannot be undone.
+                          </div>
+                        </SettingCard>
+                      </>
+                    )}
 
-                      <SettingCard
-                        title="Branch TTL"
-                        description="Auto-delete this branch after a fixed age."
-                        onSubmit={handleSaveTtl}
-                        footerRight={
-                          <Button
-                            size="sm"
-                            type="submit"
-                            disabled={
-                              !canSaveTtl ||
-                              isSaveSettingsPending ||
-                              (isMainBranch && nextTtlValue !== null)
-                            }
-                          >
-                            {isSaveSettingsPending ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              "Save"
-                            )}
-                          </Button>
-                        }
-                      >
-                        <div className="flex items-center gap-2">
-                          <Input
-                            type="number"
-                            min={1}
-                            max={8760}
-                            value={draftTtlValue}
-                            onChange={(event) =>
-                              setDraftTtlValue(event.target.value)
-                            }
-                            placeholder="disabled"
-                            className="w-36 border-neutral-700 bg-neutral-800 text-neutral-100"
-                          />
+                    {activeSettingsTab === "runtime" && (
+                      <>
+                        <SettingCard
+                          title="CPU Limit"
+                          description={`Maximum CPU cores this ${runtimeUnit} can use.`}
+                          learnMoreUrl="https://docs.docker.com/config/containers/resource_constraints/#cpu"
+                          learnMoreText="Learn more about CPU Limit"
+                          onSubmit={handleSaveCpuLimit}
+                          footerRight={
+                            <Button
+                              size="sm"
+                              type="submit"
+                              disabled={
+                                !canSaveCpuLimit || isSaveSettingsPending
+                              }
+                            >
+                              {isSaveSettingsPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                "Save"
+                              )}
+                            </Button>
+                          }
+                        >
                           <Select
-                            value={draftTtlUnit}
-                            onValueChange={(value) =>
-                              setDraftTtlUnit(value as "hours" | "days")
-                            }
+                            value={draftCpuLimit}
+                            onValueChange={setDraftCpuLimit}
                           >
-                            <SelectTrigger className="w-32">
+                            <SelectTrigger className="w-48">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="hours">hours</SelectItem>
-                              <SelectItem value="days">days</SelectItem>
+                              {filteredCpuOptions.map((option) => (
+                                <SelectItem
+                                  key={option.value}
+                                  value={option.value}
+                                >
+                                  {option.label}
+                                </SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
-                        </div>
-                        {isMainBranch && nextTtlValue !== null && (
-                          <div className="mt-2 text-xs text-neutral-500">
-                            main cannot use TTL.
-                          </div>
-                        )}
-                        {!isValidTtlValue && (
-                          <div className="mt-2 text-xs text-neutral-500">
-                            Use a whole number between 1 and 8760.
-                          </div>
-                        )}
-                      </SettingCard>
+                        </SettingCard>
 
-                      <SettingCard
-                        title="Scale To Zero"
-                        description="Auto-stop this branch after idle time."
-                        onSubmit={handleSaveScaleToZero}
-                        footerRight={
-                          <Button
-                            size="sm"
-                            type="submit"
-                            disabled={
-                              !canSaveScaleToZero || isSaveSettingsPending
-                            }
+                        <SettingCard
+                          title="Memory Limit"
+                          description={`Maximum memory this ${runtimeUnit} can use.`}
+                          learnMoreUrl="https://docs.docker.com/config/containers/resource_constraints/#memory"
+                          learnMoreText="Learn more about Memory Limit"
+                          onSubmit={handleSaveMemoryLimit}
+                          footerRight={
+                            <Button
+                              size="sm"
+                              type="submit"
+                              disabled={
+                                !canSaveMemoryLimit || isSaveSettingsPending
+                              }
+                            >
+                              {isSaveSettingsPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                "Save"
+                              )}
+                            </Button>
+                          }
+                        >
+                          <Select
+                            value={draftMemoryLimit}
+                            onValueChange={setDraftMemoryLimit}
                           >
-                            {isSaveSettingsPending ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              "Save"
-                            )}
-                          </Button>
-                        }
-                      >
-                        <div className="flex items-center gap-2">
-                          <Input
-                            type="number"
-                            min={1}
-                            max={24 * 60}
-                            value={draftScaleToZeroMinutes}
-                            onChange={(event) =>
-                              setDraftScaleToZeroMinutes(event.target.value)
-                            }
-                            placeholder="disabled"
-                            className="w-40 border-neutral-700 bg-neutral-800 text-neutral-100"
-                          />
-                          <span className="text-sm text-neutral-500">
-                            minutes
-                          </span>
-                        </div>
-                        {scaleToZeroBlockedReason && (
-                          <div className="mt-2 text-xs text-neutral-500">
-                            {scaleToZeroBlockedReason}
+                            <SelectTrigger className="w-48">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {filteredMemoryOptions.map((option) => (
+                                <SelectItem
+                                  key={option.value}
+                                  value={option.value}
+                                >
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </SettingCard>
+
+                        <SettingCard
+                          title="Branch TTL"
+                          description="Auto-delete this branch after a fixed age."
+                          onSubmit={handleSaveTtl}
+                          footerRight={
+                            <Button
+                              size="sm"
+                              type="submit"
+                              disabled={
+                                !canSaveTtl ||
+                                isSaveSettingsPending ||
+                                (isMainBranch && nextTtlValue !== null)
+                              }
+                            >
+                              {isSaveSettingsPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                "Save"
+                              )}
+                            </Button>
+                          }
+                        >
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="number"
+                              min={1}
+                              max={8760}
+                              value={draftTtlValue}
+                              onChange={(event) =>
+                                setDraftTtlValue(event.target.value)
+                              }
+                              placeholder="disabled"
+                              className="w-36 border-neutral-700 bg-neutral-800 text-neutral-100"
+                            />
+                            <Select
+                              value={draftTtlUnit}
+                              onValueChange={(value) =>
+                                setDraftTtlUnit(value as "hours" | "days")
+                              }
+                            >
+                              <SelectTrigger className="w-32">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="hours">hours</SelectItem>
+                                <SelectItem value="days">days</SelectItem>
+                              </SelectContent>
+                            </Select>
                           </div>
-                        )}
-                        {!isValidScaleToZeroMinutes && (
-                          <div className="mt-2 text-xs text-neutral-500">
-                            Use a whole number between 1 and 1440.
+                          {isMainBranch && nextTtlValue !== null && (
+                            <div className="mt-2 text-xs text-neutral-500">
+                              main cannot use TTL.
+                            </div>
+                          )}
+                          {!isValidTtlValue && (
+                            <div className="mt-2 text-xs text-neutral-500">
+                              Use a whole number between 1 and 8760.
+                            </div>
+                          )}
+                        </SettingCard>
+
+                        <SettingCard
+                          title="Scale To Zero"
+                          description="Auto-stop this branch after idle time."
+                          onSubmit={handleSaveScaleToZero}
+                          footerRight={
+                            <Button
+                              size="sm"
+                              type="submit"
+                              disabled={
+                                !canSaveScaleToZero || isSaveSettingsPending
+                              }
+                            >
+                              {isSaveSettingsPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                "Save"
+                              )}
+                            </Button>
+                          }
+                        >
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="number"
+                              min={1}
+                              max={24 * 60}
+                              value={draftScaleToZeroMinutes}
+                              onChange={(event) =>
+                                setDraftScaleToZeroMinutes(event.target.value)
+                              }
+                              placeholder="disabled"
+                              className="w-40 border-neutral-700 bg-neutral-800 text-neutral-100"
+                            />
+                            <span className="text-sm text-neutral-500">
+                              minutes
+                            </span>
                           </div>
-                        )}
-                      </SettingCard>
-                    </>
-                  )}
+                          {scaleToZeroBlockedReason && (
+                            <div className="mt-2 text-xs text-neutral-500">
+                              {scaleToZeroBlockedReason}
+                            </div>
+                          )}
+                          {!isValidScaleToZeroMinutes && (
+                            <div className="mt-2 text-xs text-neutral-500">
+                              Use a whole number between 1 and 1440.
+                            </div>
+                          )}
+                        </SettingCard>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -1327,10 +1303,22 @@ export function DatabaseBranchPanel({
   return (
     <>
       {branchContent && (
-        <div className="h-full overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900">
-          {branchContent}
-        </div>
+        <div className="h-full overflow-hidden">{branchContent}</div>
       )}
+
+      <ConfirmDialog
+        open={resetDialogOpen}
+        onOpenChange={setResetDialogOpen}
+        title={`Reset ${engine === "postgres" ? "branch" : "instance"}`}
+        description={`Reset ${branch?.name ?? "branch"} to ${parentBranchName ?? "parent"}? This will discard changes on this ${runtimeUnit}.`}
+        confirmLabel="Reset"
+        variant="destructive"
+        loading={isResetPending}
+        onConfirm={async () => {
+          await onReset();
+          setResetDialogOpen(false);
+        }}
+      />
 
       <ConfirmDialog
         open={deleteDialogOpen}
