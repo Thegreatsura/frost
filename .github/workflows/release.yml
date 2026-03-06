@@ -208,6 +208,7 @@ jobs:
           # Copy static files
           mkdir -p frost-release/.next
           cp -r apps/app/.next/static frost-release/.next/static
+          rm -rf frost-release/.next/node_modules
           cp -rL apps/app/.next/node_modules frost-release/.next/
           # Copy additional required files
           cp -r apps/app/schema apps/app/scripts apps/app/templates frost-release/
