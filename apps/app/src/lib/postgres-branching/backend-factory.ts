@@ -6,8 +6,11 @@ import type {
   BranchStorageBackendName,
 } from "./branch-storage-backend";
 import {
+  detectZfsHostState,
+  resolveZfsPool,
   ZfsBranchStorage,
   type ZfsBranchStorageOptions,
+  type ZfsHostState,
 } from "./zfs-branch-storage";
 
 export function resolveBranchStorageBackendName(
@@ -32,10 +35,16 @@ export function resolveApfsBasePath(env: NodeJS.ProcessEnv): string {
 
 export function resolveZfsOptions(
   env: NodeJS.ProcessEnv,
+  hostState: ZfsHostState | undefined = detectZfsHostState(),
 ): ZfsBranchStorageOptions {
+  const datasetBase = env.FROST_POSTGRES_ZFS_DATASET_BASE ?? "frost/databases";
   return {
-    pool: env.FROST_POSTGRES_ZFS_POOL ?? "",
-    datasetBase: env.FROST_POSTGRES_ZFS_DATASET_BASE ?? "frost/databases",
+    pool: resolveZfsPool({
+      configuredPool: env.FROST_POSTGRES_ZFS_POOL,
+      datasetBase,
+      hostState,
+    }),
+    datasetBase,
     mountBase:
       env.FROST_POSTGRES_ZFS_MOUNT_BASE ?? "/opt/frost/data/postgres/zfs",
   };

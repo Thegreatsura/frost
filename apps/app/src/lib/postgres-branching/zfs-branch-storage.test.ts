@@ -6,6 +6,7 @@ import {
   buildZfsMountPath,
   normalizeDatasetBase,
   normalizeStorageRef,
+  resolveZfsPool,
 } from "./zfs-branch-storage";
 
 describe("normalizeDatasetBase", () => {
@@ -81,5 +82,44 @@ describe("buildZfsCloneArgs", () => {
       "tank/frost/databases/a/b/live@frost-1",
       "tank/frost/databases/a/c/live",
     ]);
+  });
+});
+
+describe("resolveZfsPool", () => {
+  test("keeps configured pool", () => {
+    expect(
+      resolveZfsPool({
+        configuredPool: "tank",
+        datasetBase: "frost/databases",
+        hostState: {
+          pools: ["pool-a", "pool-b"],
+          datasets: ["pool-b/frost/databases"],
+        },
+      }),
+    ).toBe("tank");
+  });
+
+  test("detects a single host pool", () => {
+    expect(
+      resolveZfsPool({
+        datasetBase: "frost/databases",
+        hostState: {
+          pools: ["tank"],
+          datasets: [],
+        },
+      }),
+    ).toBe("tank");
+  });
+
+  test("detects pool from existing dataset base", () => {
+    expect(
+      resolveZfsPool({
+        datasetBase: "frost/databases",
+        hostState: {
+          pools: ["pool-a", "pool-b"],
+          datasets: ["pool-b/frost/databases", "pool-b/frost/databases/db-1"],
+        },
+      }),
+    ).toBe("pool-b");
   });
 });

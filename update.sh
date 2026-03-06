@@ -60,16 +60,73 @@ ensure_env_value() {
   echo "${key}=${value}" >> "$file"
 }
 
-detect_single_zfs_pool() {
+replace_env_value() {
+  local file="$1"
+  local key="$2"
+  local value="$3"
+  local escaped_value
+  escaped_value=$(printf '%s\n' "$value" | sed 's/[&|]/\\&/g')
+  sed -i "s|^${key}=.*$|${key}=${escaped_value}|" "$file"
+}
+
+ensure_env_value_if_blank() {
+  local file="$1"
+  local key="$2"
+  local value="$3"
+  local current
+
+  if [ -z "$value" ]; then
+    return 0
+  fi
+
+  current=$(get_env_value "$file" "$key")
+  if [ -n "$current" ]; then
+    return 0
+  fi
+
+  if [ ! -f "$file" ]; then
+    touch "$file"
+  fi
+
+  if grep -qE "^${key}=" "$file"; then
+    replace_env_value "$file" "$key" "$value"
+    return 0
+  fi
+
+  echo "${key}=${value}" >> "$file"
+}
+
+count_non_empty_lines() {
+  echo "$1" | awk 'NF {c++} END {print c+0}'
+}
+
+detect_zfs_pool() {
+  local dataset_base="$1"
   if ! command -v zpool > /dev/null 2>&1; then
     return 0
   fi
   local pools
   local count
   pools=$(zpool list -H -o name 2>/dev/null | awk 'NF {print}')
-  count=$(echo "$pools" | awk 'NF {c++} END {print c+0}')
+  count=$(count_non_empty_lines "$pools")
   if [ "$count" -eq 1 ]; then
     echo "$pools"
+    return 0
+  fi
+
+  if [ -z "$dataset_base" ] || ! command -v zfs > /dev/null 2>&1; then
+    return 0
+  fi
+
+  local matches
+  matches=$(zfs list -H -o name 2>/dev/null | awk -v suffix="/$dataset_base" '
+    NF && length($0) > length(suffix) && substr($0, length($0) - length(suffix) + 1) == suffix {
+      print substr($0, 1, length($0) - length(suffix))
+    }
+  ' | awk 'NF && !seen[$0]++ {print}')
+  count=$(count_non_empty_lines "$matches")
+  if [ "$count" -eq 1 ]; then
+    echo "$matches"
   fi
 }
 
@@ -87,16 +144,18 @@ ensure_zfs_branching_setup() {
   local mount_base
   local base_dataset
 
-  detected_pool=$(detect_single_zfs_pool || true)
-  pool=$(get_env_value "$env_file" "FROST_POSTGRES_ZFS_POOL")
-  if [ -z "$pool" ]; then
-    pool="$detected_pool"
+  dataset_base=$(get_env_value "$env_file" "FROST_POSTGRES_ZFS_DATASET_BASE")
+  if [ -z "$dataset_base" ]; then
+    dataset_base="frost/databases"
   fi
 
-  ensure_env_value "$env_file" "FROST_POSTGRES_ZFS_POOL" "$pool"
-  ensure_env_value "$env_file" "FROST_POSTGRES_ZFS_DATASET_BASE" "frost/databases"
-  ensure_env_value "$env_file" "FROST_POSTGRES_ZFS_MOUNT_BASE" "/opt/frost/data/postgres/zfs"
+  detected_pool=$(detect_zfs_pool "$dataset_base" || true)
 
+  ensure_env_value_if_blank "$env_file" "FROST_POSTGRES_ZFS_POOL" "$detected_pool"
+  ensure_env_value_if_blank "$env_file" "FROST_POSTGRES_ZFS_DATASET_BASE" "$dataset_base"
+  ensure_env_value_if_blank "$env_file" "FROST_POSTGRES_ZFS_MOUNT_BASE" "/opt/frost/data/postgres/zfs"
+
+  pool=$(get_env_value "$env_file" "FROST_POSTGRES_ZFS_POOL")
   dataset_base=$(get_env_value "$env_file" "FROST_POSTGRES_ZFS_DATASET_BASE")
   mount_base=$(get_env_value "$env_file" "FROST_POSTGRES_ZFS_MOUNT_BASE")
 

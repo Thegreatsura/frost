@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { mkdir, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
@@ -14,6 +14,11 @@ export interface ZfsBranchStorageOptions {
   pool: string;
   datasetBase: string;
   mountBase: string;
+}
+
+export interface ZfsHostState {
+  pools: string[];
+  datasets: string[];
 }
 
 export function normalizeDatasetBase(datasetBase: string): string {
@@ -82,6 +87,77 @@ export function buildZfsCloneArgs(
     snapshotName,
     targetDatasetPath,
   ];
+}
+
+function parseZfsNameList(value: string): string[] {
+  return value
+    .split("\n")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+}
+
+export function detectZfsHostState(): ZfsHostState | undefined {
+  try {
+    return {
+      pools: parseZfsNameList(
+        execFileSync("zpool", ["list", "-H", "-o", "name"], {
+          encoding: "utf8",
+        }),
+      ),
+      datasets: parseZfsNameList(
+        execFileSync("zfs", ["list", "-H", "-o", "name"], {
+          encoding: "utf8",
+        }),
+      ),
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+export function resolveZfsPool(input: {
+  configuredPool?: string;
+  datasetBase: string;
+  hostState?: ZfsHostState;
+}): string {
+  const configuredPool = input.configuredPool?.trim() ?? "";
+  if (configuredPool.length > 0) {
+    return configuredPool;
+  }
+
+  const hostState = input.hostState;
+  if (!hostState) {
+    return "";
+  }
+
+  const pools = Array.from(
+    new Set(hostState.pools.map((item) => item.trim()).filter(Boolean)),
+  );
+  if (pools.length === 1) {
+    return pools[0];
+  }
+
+  const datasetBase = normalizeDatasetBase(input.datasetBase);
+  if (datasetBase.length === 0) {
+    return "";
+  }
+
+  const suffix = `/${datasetBase}`;
+  const matchingPools = Array.from(
+    new Set(
+      hostState.datasets
+        .map((item) => item.trim())
+        .filter((item) => item.endsWith(suffix))
+        .map((item) => item.slice(0, -suffix.length))
+        .filter((item) => item.length > 0),
+    ),
+  );
+
+  if (matchingPools.length === 1) {
+    return matchingPools[0];
+  }
+
+  return "";
 }
 
 function formatExecError(command: string, error: unknown): string {
@@ -167,6 +243,10 @@ export class ZfsBranchStorage implements BranchStorageBackend {
     const baseDataset = this.getBaseDatasetPath();
     const exists = await this.datasetExistsByPath(baseDataset);
     if (!exists) {
+      await runExec("zfs", ["create", "-p", baseDataset]);
+    }
+
+    if (!(await this.datasetExistsByPath(baseDataset))) {
       throw new Error(
         `Missing ZFS dataset ${baseDataset}. Run install.sh or update.sh to prepare ZFS for Postgres branching.`,
       );

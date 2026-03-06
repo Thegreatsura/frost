@@ -35,7 +35,7 @@ describe("resolveApfsBasePath", () => {
 
 describe("resolveZfsOptions", () => {
   test("uses defaults", () => {
-    expect(resolveZfsOptions({ NODE_ENV: "test" })).toEqual({
+    expect(resolveZfsOptions({ NODE_ENV: "test" }, undefined)).toEqual({
       pool: "",
       datasetBase: "frost/databases",
       mountBase: "/opt/frost/data/postgres/zfs",
@@ -54,6 +54,38 @@ describe("resolveZfsOptions", () => {
       pool: "tank",
       datasetBase: "frost/db",
       mountBase: "/data/zfs",
+    });
+  });
+
+  test("detects a single host pool when config is empty", () => {
+    expect(
+      resolveZfsOptions(
+        { NODE_ENV: "test" },
+        { pools: ["tank"], datasets: ["tank/frost/databases"] },
+      ),
+    ).toEqual({
+      pool: "tank",
+      datasetBase: "frost/databases",
+      mountBase: "/opt/frost/data/postgres/zfs",
+    });
+  });
+
+  test("detects pool from the existing dataset base", () => {
+    expect(
+      resolveZfsOptions(
+        {
+          NODE_ENV: "test",
+          FROST_POSTGRES_ZFS_DATASET_BASE: "frost/db",
+        },
+        {
+          pools: ["tank-a", "tank-b"],
+          datasets: ["tank-b/frost/db", "tank-b/frost/db/x"],
+        },
+      ),
+    ).toEqual({
+      pool: "tank-b",
+      datasetBase: "frost/db",
+      mountBase: "/opt/frost/data/postgres/zfs",
     });
   });
 });
