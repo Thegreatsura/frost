@@ -1,6 +1,6 @@
 {
   "name": "@frost/app",
-  "version": "0.18.1",
+  "version": "0.18.2",
   "private": true,
   "scripts": {
     "dev": "bun --bun next dev",
