@@ -18,7 +18,6 @@ import type {
   DatabaseTargetDeployments,
   DatabaseTargets,
   Environments,
-  Services,
 } from "./db-types";
 import {
   connectContainerToNetwork,
@@ -34,9 +33,7 @@ import {
   newDatabaseId,
   newDatabaseTargetDeploymentId,
   newDatabaseTargetId,
-  newEnvironmentDatabaseAttachmentId,
   newRuntimeServiceId,
-  newServiceDatabaseBindingId,
 } from "./id";
 import type { BranchStorageBackendName } from "./postgres-branching/branch-storage-backend";
 import {
@@ -59,7 +56,6 @@ const execAsync = promisify(exec);
 export type DatabaseEngine = "postgres" | "mysql";
 export type DatabaseTargetKind = "branch" | "instance";
 export type DatabaseTargetLifecycle = "active" | "stopped" | "expired";
-export type AttachmentMode = "managed" | "manual";
 export type DatabaseTargetDeploymentAction =
   | "create"
   | "deploy"
@@ -130,7 +126,6 @@ export interface DatabaseTargetSqlResult {
 
 const DATABASE_NAME_PATTERN = /^[a-z0-9]([a-z0-9-]{0,46}[a-z0-9])?$/;
 const TARGET_NAME_PATTERN = /^[a-z0-9]([a-z0-9-]{0,60}[a-z0-9])?$/;
-const ENV_VAR_KEY_PATTERN = /^[A-Z_][A-Z0-9_]*$/;
 const MEMORY_LIMIT_PATTERN = /^\d+[kmg]$/i;
 const POSTGRES_QUERY_MAX_BUFFER_BYTES = 8 * 1024 * 1024;
 const TARGET_ACTIVITY_WRITE_THROTTLE_MS = 5000;
@@ -765,32 +760,22 @@ function getTargetAliases(input: {
   return aliases;
 }
 
-export async function ensureTargetNetworkAttachment(input: {
-  environment: Selectable<Environments>;
-  database: Selectable<Databases>;
-  target: Selectable<DatabaseTargets>;
-}): Promise<void> {
-  const providerRef = parseProviderRef(input.target.providerRefJson);
-  const networkName = buildNetworkName(input.environment);
-  await createNetwork(networkName, {
-    "frost.managed": "true",
-    "frost.project.id": input.environment.projectId,
-  });
-  await connectContainerToNetwork(providerRef.containerName, networkName, [
-    ...getBaseAliases(input.database.name),
-  ]);
-}
-
 async function ensurePostgresDatabaseNetworkAttachment(input: {
   environment: Selectable<Environments>;
   database: Selectable<Databases>;
-  defaultTargetId: string;
 }): Promise<void> {
   const targets = await db
     .selectFrom("databaseTargets")
     .selectAll()
     .where("databaseId", "=", input.database.id)
     .execute();
+
+  if (targets.length === 0) {
+    return;
+  }
+
+  const mainTargetId =
+    targets.find((target) => target.name === "main")?.id ?? targets[0]?.id;
 
   const networkName = buildNetworkName(input.environment);
   await createNetwork(networkName, {
@@ -814,32 +799,54 @@ async function ensurePostgresDatabaseNetworkAttachment(input: {
       getTargetAliases({
         databaseName: input.database.name,
         targetHostname: target.hostname,
-        includeBaseAliases: target.id === input.defaultTargetId,
+        includeBaseAliases: target.id === mainTargetId,
       }),
     );
   }
 }
 
-async function reconnectPostgresDatabaseAttachments(
+async function reconnectPostgresDatabaseNetwork(
   database: Selectable<Databases>,
 ): Promise<void> {
-  const envDefaults = await db
-    .selectFrom("environmentDatabaseAttachments")
-    .innerJoin(
-      "environments",
-      "environments.id",
-      "environmentDatabaseAttachments.environmentId",
-    )
-    .selectAll("environments")
-    .select("environmentDatabaseAttachments.targetId as defaultTargetId")
-    .where("environmentDatabaseAttachments.databaseId", "=", database.id)
+  if (database.engine !== "postgres") {
+    return;
+  }
+
+  const environments = await db
+    .selectFrom("environments")
+    .selectAll()
+    .where("projectId", "=", database.projectId)
     .execute();
 
-  for (const envDefault of envDefaults) {
+  for (const environment of environments) {
+    await ensurePostgresDatabaseNetworkAttachment({ environment, database });
+  }
+}
+
+export async function ensureEnvironmentPostgresNetworkAccess(
+  environmentId: string,
+): Promise<void> {
+  const environment = await db
+    .selectFrom("environments")
+    .selectAll()
+    .where("id", "=", environmentId)
+    .executeTakeFirst();
+
+  if (!environment) {
+    throw new Error("Environment not found");
+  }
+
+  const databases = await db
+    .selectFrom("databases")
+    .selectAll()
+    .where("projectId", "=", environment.projectId)
+    .where("engine", "=", "postgres")
+    .execute();
+
+  for (const database of databases) {
     await ensurePostgresDatabaseNetworkAttachment({
-      environment: envDefault,
-      database,
-      defaultTargetId: envDefault.defaultTargetId,
+      environment,
+      database: normalizeDatabase(database),
     });
   }
 }
@@ -904,21 +911,6 @@ export async function restoreDatabaseTargetGateways(): Promise<void> {
       });
     }
   }
-}
-
-function buildConnectionString(
-  database: Selectable<Databases>,
-  providerRef: ProviderRef,
-): string {
-  const username = encodeURIComponent(providerRef.username);
-  const password = encodeURIComponent(providerRef.password);
-  const dbName = encodeURIComponent(providerRef.database);
-  const host = database.name;
-  if (database.engine === "postgres") {
-    const sslQuery = providerRef.ssl ? "?sslmode=require" : "";
-    return `postgres://${username}:${password}@${host}:5432/${dbName}${sslQuery}`;
-  }
-  return `mysql://${username}:${password}@${host}:3306/${dbName}`;
 }
 
 export async function createDatabase(input: {
@@ -1038,31 +1030,7 @@ export async function createDatabase(input: {
 
     if (input.engine === "postgres") {
       const createdDatabase = await getDatabaseById(databaseId);
-      const environments = await db
-        .selectFrom("environments")
-        .selectAll()
-        .where("projectId", "=", input.projectId)
-        .execute();
-
-      for (const environment of environments) {
-        await db
-          .insertInto("environmentDatabaseAttachments")
-          .values({
-            id: newEnvironmentDatabaseAttachmentId(),
-            environmentId: environment.id,
-            databaseId,
-            targetId,
-            mode: "managed",
-            createdAt: Date.now(),
-          })
-          .execute();
-
-        await ensurePostgresDatabaseNetworkAttachment({
-          environment,
-          database: createdDatabase,
-          defaultTargetId: targetId,
-        });
-      }
+      await reconnectPostgresDatabaseNetwork(createdDatabase);
     }
 
     rollback.clear();
@@ -1197,38 +1165,9 @@ export async function createDatabaseTarget(input: {
 
   const target = await getTargetById(targetId);
   if (database.engine === "postgres") {
-    await reconnectPostgresDatabaseAttachments(database);
+    await reconnectPostgresDatabaseNetwork(database);
   }
   return target;
-}
-
-async function reconnectTargetAttachments(
-  database: Selectable<Databases>,
-  target: Selectable<DatabaseTargets>,
-): Promise<void> {
-  if (database.engine === "postgres") {
-    await reconnectPostgresDatabaseAttachments(database);
-    return;
-  }
-
-  const attachments = await db
-    .selectFrom("environmentDatabaseAttachments")
-    .innerJoin(
-      "environments",
-      "environments.id",
-      "environmentDatabaseAttachments.environmentId",
-    )
-    .selectAll("environments")
-    .where("environmentDatabaseAttachments.targetId", "=", target.id)
-    .execute();
-
-  for (const environment of attachments) {
-    await ensureTargetNetworkAttachment({
-      environment,
-      database,
-      target,
-    });
-  }
 }
 
 export async function resetDatabaseTarget(input: {
@@ -1313,6 +1252,7 @@ export async function resetDatabaseTarget(input: {
       fixedHostPort: getTargetRuntimeHostPort(target, currentRef),
       storageMountPath: liveMountPath,
     });
+    await waitForPostgresReady(nextRef);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Reset failed while starting";
@@ -1357,7 +1297,7 @@ export async function resetDatabaseTarget(input: {
 
   const updated = await getTargetById(target.id);
   await ensureTargetGateway(updated.id);
-  await reconnectTargetAttachments(database, updated);
+  await reconnectPostgresDatabaseNetwork(database);
   return updated;
 }
 
@@ -1377,6 +1317,9 @@ export async function startDatabaseTarget(input: {
     providerRef,
     fixedHostPort: runtimeHostPort,
   });
+  if (database.engine === "postgres") {
+    await waitForPostgresReady(nextRef);
+  }
   applyProviderRefRuntimePorts({
     target,
     previousProviderRef: providerRef,
@@ -1402,7 +1345,7 @@ export async function startDatabaseTarget(input: {
 
   const updated = await getTargetById(target.id);
   await ensureTargetGateway(updated.id);
-  await reconnectTargetAttachments(database, updated);
+  await reconnectPostgresDatabaseNetwork(database);
   return updated;
 }
 
@@ -1447,16 +1390,6 @@ export async function deleteDatabaseTarget(input: {
     throw new Error("main target cannot be deleted");
   }
 
-  const attachment = await db
-    .selectFrom("environmentDatabaseAttachments")
-    .select("id")
-    .where("targetId", "=", target.id)
-    .executeTakeFirst();
-
-  if (attachment) {
-    throw new Error("Target is attached to one or more environments");
-  }
-
   await stopDatabaseTargetGateway(target.id);
   clearTargetActivityWrite(target.id);
   const providerRef = parseProviderRef(target.providerRefJson);
@@ -1488,290 +1421,57 @@ export async function deleteDatabase(databaseId: string): Promise<void> {
   await db.deleteFrom("databases").where("id", "=", database.id).execute();
 }
 
-export async function putEnvironmentAttachment(input: {
-  environmentId: string;
+export async function patchDatabase(input: {
   databaseId: string;
-  targetId: string;
-  mode: AttachmentMode;
-}): Promise<void> {
-  const environment = await db
-    .selectFrom("environments")
-    .selectAll()
-    .where("id", "=", input.environmentId)
-    .executeTakeFirst();
-
-  if (!environment) {
-    throw new Error("Environment not found");
-  }
-
+  name?: string;
+}): Promise<Selectable<Databases>> {
   const database = await getDatabaseById(input.databaseId);
+  let nextName: string | undefined;
 
-  if (database.projectId !== environment.projectId) {
-    throw new Error("Environment and database must belong to the same project");
-  }
+  if (input.name !== undefined) {
+    const name = input.name.trim();
+    assertDatabaseName(name);
 
-  const target = await getTargetById(input.targetId);
-
-  if (target.databaseId !== database.id) {
-    throw new Error("Target does not belong to the database");
-  }
-
-  if (target.scaleToZeroMinutes !== null) {
-    throw new Error("Cannot attach a target while scale to zero is enabled");
-  }
-
-  if (
-    environment.type === "production" &&
-    database.engine === "postgres" &&
-    target.name !== "main"
-  ) {
-    throw new Error("Production Postgres attachment must use main");
-  }
-
-  const existingAttachment = await db
-    .selectFrom("environmentDatabaseAttachments")
-    .selectAll()
-    .where("environmentId", "=", environment.id)
-    .where("databaseId", "=", database.id)
-    .executeTakeFirst();
-
-  await db
-    .deleteFrom("environmentDatabaseAttachments")
-    .where("environmentId", "=", environment.id)
-    .where("databaseId", "=", database.id)
-    .execute();
-
-  await db
-    .insertInto("environmentDatabaseAttachments")
-    .values({
-      id: newEnvironmentDatabaseAttachmentId(),
-      environmentId: environment.id,
-      databaseId: database.id,
-      targetId: target.id,
-      mode: input.mode,
-      createdAt: Date.now(),
-    })
-    .execute();
-
-  if (database.engine === "postgres") {
-    await ensurePostgresDatabaseNetworkAttachment({
-      environment,
-      database,
-      defaultTargetId: target.id,
-    });
-    return;
-  }
-
-  if (existingAttachment && existingAttachment.targetId !== target.id) {
-    const previousTarget = await db
-      .selectFrom("databaseTargets")
-      .select("providerRefJson")
-      .where("id", "=", existingAttachment.targetId)
-      .executeTakeFirst();
-
-    if (previousTarget) {
-      const previousRef = parseProviderRef(previousTarget.providerRefJson);
-      await disconnectContainerFromNetwork(
-        previousRef.containerName,
-        buildNetworkName(environment),
-      );
-    }
-  }
-
-  await ensureTargetNetworkAttachment({ environment, database, target });
-}
-
-export async function deleteEnvironmentAttachment(input: {
-  environmentId: string;
-  databaseId: string;
-}): Promise<void> {
-  const attachment = await db
-    .selectFrom("environmentDatabaseAttachments")
-    .selectAll()
-    .where("environmentId", "=", input.environmentId)
-    .where("databaseId", "=", input.databaseId)
-    .executeTakeFirst();
-
-  if (!attachment) {
-    return;
-  }
-
-  const [environment, target, database] = await Promise.all([
-    db
-      .selectFrom("environments")
-      .selectAll()
-      .where("id", "=", attachment.environmentId)
-      .executeTakeFirst(),
-    db
-      .selectFrom("databaseTargets")
-      .selectAll()
-      .where("id", "=", attachment.targetId)
-      .executeTakeFirst(),
-    db
+    const existing = await db
       .selectFrom("databases")
-      .selectAll()
-      .where("id", "=", attachment.databaseId)
-      .executeTakeFirst(),
-  ]);
-
-  await db
-    .deleteFrom("environmentDatabaseAttachments")
-    .where("id", "=", attachment.id)
-    .execute();
-
-  if (environment && database && database.engine === "postgres") {
-    const targets = await db
-      .selectFrom("databaseTargets")
-      .select("providerRefJson")
-      .where("databaseId", "=", database.id)
-      .execute();
-    const networkName = buildNetworkName(environment);
-    for (const row of targets) {
-      const providerRef = parseProviderRef(row.providerRefJson);
-      await disconnectContainerFromNetwork(
-        providerRef.containerName,
-        networkName,
-      );
-    }
-
-    if (attachment.mode !== "managed") {
-      return;
-    }
-
-    const remaining = await db
-      .selectFrom("environmentDatabaseAttachments")
       .select("id")
-      .where("targetId", "=", attachment.targetId)
+      .where("projectId", "=", database.projectId)
+      .where("name", "=", name)
+      .where("id", "!=", database.id)
       .executeTakeFirst();
 
-    if (remaining) {
-      return;
+    if (existing) {
+      throw new Error("Database with this name already exists");
     }
 
-    if (!target || target.name === "main") {
-      return;
-    }
-
-    await stopDatabaseTargetGateway(target.id);
-    clearTargetActivityWrite(target.id);
-    const providerRef = parseProviderRef(target.providerRefJson);
-    await stopContainer(providerRef.containerName);
-    await removePostgresStorage(getPostgresStorageMetadata(providerRef));
-    await db
-      .deleteFrom("databaseTargets")
-      .where("id", "=", target.id)
-      .execute();
-    return;
+    nextName = name;
   }
 
-  if (environment && target) {
-    const providerRef = parseProviderRef(target.providerRefJson);
-    await disconnectContainerFromNetwork(
-      providerRef.containerName,
-      buildNetworkName(environment),
-    );
+  if (nextName === undefined) {
+    return database;
   }
 
-  if (attachment.mode !== "managed") {
-    return;
+  await db
+    .updateTable("databases")
+    .set({
+      name: nextName,
+    })
+    .where("id", "=", database.id)
+    .execute();
+
+  const updated = await getDatabaseById(database.id);
+  if (updated.engine === "postgres") {
+    await reconnectPostgresDatabaseNetwork(updated);
   }
-
-  const remaining = await db
-    .selectFrom("environmentDatabaseAttachments")
-    .select("id")
-    .where("targetId", "=", attachment.targetId)
-    .executeTakeFirst();
-
-  if (remaining) {
-    return;
-  }
-
-  if (!target || target.name === "main") {
-    return;
-  }
-
-  await stopDatabaseTargetGateway(target.id);
-  clearTargetActivityWrite(target.id);
-  const providerRef = parseProviderRef(target.providerRefJson);
-  await stopContainer(providerRef.containerName);
-  await db.deleteFrom("databaseTargets").where("id", "=", target.id).execute();
+  return updated;
 }
 
 export async function cleanupEnvironmentAttachments(
   environmentId: string,
 ): Promise<void> {
-  const attachments = await db
-    .selectFrom("environmentDatabaseAttachments")
-    .select(["environmentId", "databaseId"])
+  await db
+    .deleteFrom("environmentDatabaseAttachments")
     .where("environmentId", "=", environmentId)
-    .execute();
-
-  for (const attachment of attachments) {
-    await deleteEnvironmentAttachment(attachment);
-  }
-}
-
-export async function createServiceDatabaseBinding(input: {
-  serviceId: string;
-  databaseId: string;
-  envVarKey: string;
-}): Promise<void> {
-  if (!ENV_VAR_KEY_PATTERN.test(input.envVarKey)) {
-    throw new Error(
-      "envVarKey must be uppercase and use letters, numbers, and underscores",
-    );
-  }
-
-  const service = await db
-    .selectFrom("services")
-    .innerJoin("environments", "environments.id", "services.environmentId")
-    .select(["services.id as serviceId", "environments.projectId as projectId"])
-    .where("services.id", "=", input.serviceId)
-    .executeTakeFirst();
-
-  if (!service) {
-    throw new Error("Service not found");
-  }
-
-  const database = await getDatabaseById(input.databaseId);
-  if (database.projectId !== service.projectId) {
-    throw new Error("Service and database must belong to the same project");
-  }
-
-  const existing = await db
-    .selectFrom("serviceDatabaseBindings")
-    .select("id")
-    .where("serviceId", "=", input.serviceId)
-    .where("envVarKey", "=", input.envVarKey)
-    .executeTakeFirst();
-
-  if (existing) {
-    await db
-      .updateTable("serviceDatabaseBindings")
-      .set({ databaseId: input.databaseId })
-      .where("id", "=", existing.id)
-      .execute();
-    return;
-  }
-
-  await db
-    .insertInto("serviceDatabaseBindings")
-    .values({
-      id: newServiceDatabaseBindingId(),
-      serviceId: input.serviceId,
-      databaseId: input.databaseId,
-      envVarKey: input.envVarKey,
-      createdAt: Date.now(),
-    })
-    .execute();
-}
-
-export async function deleteServiceDatabaseBinding(
-  bindingId: string,
-): Promise<void> {
-  await db
-    .deleteFrom("serviceDatabaseBindings")
-    .where("id", "=", bindingId)
     .execute();
 }
 
@@ -1802,6 +1502,9 @@ export async function deployDatabaseTarget(
       providerRef,
       fixedHostPort: runtimeHostPort,
     });
+    if (database.engine === "postgres") {
+      await waitForPostgresReady(nextRef);
+    }
     applyProviderRefRuntimePorts({
       target,
       previousProviderRef: providerRef,
@@ -1819,6 +1522,9 @@ export async function deployDatabaseTarget(
       .execute();
 
     await ensureTargetGateway(target.id);
+    if (database.engine === "postgres") {
+      await reconnectPostgresDatabaseNetwork(database);
+    }
 
     return recordTargetDeployment({
       targetId: target.id,
@@ -2108,17 +1814,6 @@ export async function patchDatabaseTargetRuntimeSettings(input: {
       (await getTargetById(target.id)).providerRefJson,
     );
     if (nextScaleToZeroMinutes !== null) {
-      const attachment = await db
-        .selectFrom("environmentDatabaseAttachments")
-        .select("id")
-        .where("targetId", "=", target.id)
-        .executeTakeFirst();
-      if (attachment) {
-        throw new Error(
-          "Scale to zero only works for detached branches right now",
-        );
-      }
-
       let runtimeHostPort = target.runtimeHostPort;
       let nextProviderRef = currentProviderRef;
 
@@ -2231,10 +1926,11 @@ export async function patchDatabaseTargetRuntimeSettings(input: {
     });
   }
 
-  if (nameChanged || hostnameChanged) {
-    if (database.engine === "postgres") {
-      await reconnectPostgresDatabaseAttachments(database);
-    }
+  if (
+    database.engine === "postgres" &&
+    (nameChanged || hostnameChanged || scaleToZeroChanged)
+  ) {
+    await reconnectPostgresDatabaseNetwork(database);
   }
 
   return getDatabaseTargetRuntime(target.id);
@@ -2279,285 +1975,6 @@ export async function resolveContainerName(input: {
   return parseProviderRef(target.providerRefJson).containerName;
 }
 
-export async function resolveServiceDatabaseEnvVars(input: {
-  serviceId: string;
-  environmentId: string;
-}): Promise<Record<string, string>> {
-  const service = await db
-    .selectFrom("services")
-    .select(["id", "environmentId"])
-    .where("id", "=", input.serviceId)
-    .executeTakeFirst();
-
-  if (!service) {
-    throw new Error("Service not found");
-  }
-
-  if (service.environmentId !== input.environmentId) {
-    throw new Error("Service does not belong to the requested environment");
-  }
-
-  const bindings = await db
-    .selectFrom("serviceDatabaseBindings")
-    .innerJoin(
-      "databases",
-      "databases.id",
-      "serviceDatabaseBindings.databaseId",
-    )
-    .select([
-      "serviceDatabaseBindings.envVarKey",
-      "serviceDatabaseBindings.databaseId",
-      "databases.name as databaseName",
-      "databases.engine as databaseEngine",
-      "databases.projectId as projectId",
-    ])
-    .where("serviceDatabaseBindings.serviceId", "=", input.serviceId)
-    .execute();
-
-  if (bindings.length === 0) {
-    return {};
-  }
-
-  const environment = await db
-    .selectFrom("environments")
-    .selectAll()
-    .where("id", "=", input.environmentId)
-    .executeTakeFirst();
-
-  if (!environment) {
-    throw new Error("Environment not found");
-  }
-
-  const envVars: Record<string, string> = {};
-
-  for (const binding of bindings) {
-    if (binding.projectId !== environment.projectId) {
-      throw new Error("Database binding project mismatch");
-    }
-
-    let attachment = await db
-      .selectFrom("environmentDatabaseAttachments")
-      .selectAll()
-      .where("environmentId", "=", environment.id)
-      .where("databaseId", "=", binding.databaseId)
-      .executeTakeFirst();
-
-    const database = await getDatabaseById(binding.databaseId);
-
-    if (!attachment) {
-      if (database.engine === "postgres") {
-        const mainTarget = await getTargetByName(database.id, "main");
-        await putEnvironmentAttachment({
-          environmentId: environment.id,
-          databaseId: database.id,
-          targetId: mainTarget.id,
-          mode: "managed",
-        });
-        attachment = await db
-          .selectFrom("environmentDatabaseAttachments")
-          .selectAll()
-          .where("environmentId", "=", environment.id)
-          .where("databaseId", "=", binding.databaseId)
-          .executeTakeFirst();
-      } else {
-        throw new Error(
-          `Environment is missing attachment for database ${binding.databaseName}`,
-        );
-      }
-    }
-
-    if (!attachment) {
-      throw new Error("Failed to resolve database default target");
-    }
-
-    let target = await getTargetById(attachment.targetId);
-
-    if (target.lifecycleStatus !== "active") {
-      target = await startDatabaseTarget({
-        databaseId: database.id,
-        targetId: target.id,
-      });
-    }
-
-    const providerRef = parseProviderRef(target.providerRefJson);
-
-    if (database.engine === "postgres") {
-      await ensurePostgresDatabaseNetworkAttachment({
-        environment,
-        database,
-        defaultTargetId: target.id,
-      });
-    } else {
-      await ensureTargetNetworkAttachment({
-        environment,
-        database,
-        target,
-      });
-    }
-
-    envVars[binding.envVarKey] = buildConnectionString(database, providerRef);
-  }
-
-  return envVars;
-}
-
-function buildManagedTargetNameFromEnvironment(
-  environment: Selectable<Environments>,
-): string {
-  if (environment.type === "preview" && environment.prNumber !== null) {
-    return `pr-${environment.prNumber}`;
-  }
-  return slugify(environment.name).slice(0, 62);
-}
-
-export async function cloneEnvironmentDatabaseTargets(input: {
-  sourceEnvironmentId: string;
-  targetEnvironmentId: string;
-}): Promise<void> {
-  const sourceEnvironment = await db
-    .selectFrom("environments")
-    .selectAll()
-    .where("id", "=", input.sourceEnvironmentId)
-    .executeTakeFirst();
-
-  const targetEnvironment = await db
-    .selectFrom("environments")
-    .selectAll()
-    .where("id", "=", input.targetEnvironmentId)
-    .executeTakeFirst();
-
-  if (!sourceEnvironment || !targetEnvironment) {
-    throw new Error("Environment not found");
-  }
-
-  if (sourceEnvironment.projectId !== targetEnvironment.projectId) {
-    throw new Error("Source and target environments must share a project");
-  }
-
-  const sourceAttachments = await db
-    .selectFrom("environmentDatabaseAttachments")
-    .innerJoin(
-      "databases",
-      "databases.id",
-      "environmentDatabaseAttachments.databaseId",
-    )
-    .innerJoin(
-      "databaseTargets",
-      "databaseTargets.id",
-      "environmentDatabaseAttachments.targetId",
-    )
-    .selectAll("environmentDatabaseAttachments")
-    .selectAll("databases")
-    .select([
-      "databaseTargets.id as sourceTargetId",
-      "databaseTargets.name as sourceTargetName",
-    ])
-    .where(
-      "environmentDatabaseAttachments.environmentId",
-      "=",
-      sourceEnvironment.id,
-    )
-    .execute();
-
-  for (const row of sourceAttachments) {
-    const databaseId = row.databaseId;
-    const database = await getDatabaseById(databaseId);
-    const managedTargetName =
-      buildManagedTargetNameFromEnvironment(targetEnvironment);
-
-    let target = await db
-      .selectFrom("databaseTargets")
-      .selectAll()
-      .where("databaseId", "=", databaseId)
-      .where("name", "=", managedTargetName)
-      .executeTakeFirst();
-
-    if (!target) {
-      if (database.engine === "postgres") {
-        target = await createDatabaseTarget({
-          databaseId,
-          name: managedTargetName,
-          sourceTargetName: row.sourceTargetName,
-        });
-      } else {
-        target = await createDatabaseTarget({
-          databaseId,
-          name: managedTargetName,
-        });
-      }
-    }
-
-    await putEnvironmentAttachment({
-      environmentId: targetEnvironment.id,
-      databaseId,
-      targetId: target.id,
-      mode: "managed",
-    });
-  }
-}
-
-export async function ensureEnvironmentPostgresDefaults(
-  environmentId: string,
-): Promise<void> {
-  const environment = await db
-    .selectFrom("environments")
-    .selectAll()
-    .where("id", "=", environmentId)
-    .executeTakeFirst();
-
-  if (!environment) {
-    throw new Error("Environment not found");
-  }
-
-  const databases = await db
-    .selectFrom("databases")
-    .selectAll()
-    .where("projectId", "=", environment.projectId)
-    .where("engine", "=", "postgres")
-    .execute();
-
-  for (const database of databases) {
-    let attachment = await db
-      .selectFrom("environmentDatabaseAttachments")
-      .selectAll()
-      .where("environmentId", "=", environment.id)
-      .where("databaseId", "=", database.id)
-      .executeTakeFirst();
-
-    if (!attachment) {
-      const mainTarget = await getTargetByName(database.id, "main");
-      await db
-        .insertInto("environmentDatabaseAttachments")
-        .values({
-          id: newEnvironmentDatabaseAttachmentId(),
-          environmentId: environment.id,
-          databaseId: database.id,
-          targetId: mainTarget.id,
-          mode: "managed",
-          createdAt: Date.now(),
-        })
-        .execute();
-
-      attachment = await db
-        .selectFrom("environmentDatabaseAttachments")
-        .selectAll()
-        .where("environmentId", "=", environment.id)
-        .where("databaseId", "=", database.id)
-        .executeTakeFirst();
-    }
-
-    if (!attachment) {
-      continue;
-    }
-
-    await ensurePostgresDatabaseNetworkAttachment({
-      environment,
-      database,
-      defaultTargetId: attachment.targetId,
-    });
-  }
-}
-
 export async function listDatabasesByProject(projectId: string) {
   const databases = await db
     .selectFrom("databases")
@@ -2578,102 +1995,6 @@ export async function listDatabaseTargets(databaseId: string) {
     .execute();
 }
 
-export async function listEnvironmentDatabaseAttachments(
-  environmentId: string,
-) {
-  return db
-    .selectFrom("environmentDatabaseAttachments")
-    .innerJoin(
-      "databases",
-      "databases.id",
-      "environmentDatabaseAttachments.databaseId",
-    )
-    .innerJoin(
-      "databaseTargets",
-      "databaseTargets.id",
-      "environmentDatabaseAttachments.targetId",
-    )
-    .selectAll("environmentDatabaseAttachments")
-    .select([
-      "databases.name as databaseName",
-      "databases.engine as databaseEngine",
-      "databaseTargets.name as targetName",
-      "databaseTargets.lifecycleStatus as targetLifecycleStatus",
-    ])
-    .where("environmentDatabaseAttachments.environmentId", "=", environmentId)
-    .orderBy("environmentDatabaseAttachments.createdAt", "asc")
-    .execute();
-}
-
-export async function listServiceDatabaseBindings(serviceId: string) {
-  return db
-    .selectFrom("serviceDatabaseBindings")
-    .innerJoin(
-      "databases",
-      "databases.id",
-      "serviceDatabaseBindings.databaseId",
-    )
-    .selectAll("serviceDatabaseBindings")
-    .select([
-      "databases.name as databaseName",
-      "databases.engine as databaseEngine",
-    ])
-    .where("serviceDatabaseBindings.serviceId", "=", serviceId)
-    .orderBy("serviceDatabaseBindings.createdAt", "asc")
-    .execute();
-}
-
 export async function getDatabase(databaseId: string) {
   return getDatabaseById(databaseId);
-}
-
-export async function listDatabaseAttachments(databaseId: string) {
-  return db
-    .selectFrom("environmentDatabaseAttachments")
-    .innerJoin(
-      "environments",
-      "environments.id",
-      "environmentDatabaseAttachments.environmentId",
-    )
-    .innerJoin(
-      "databaseTargets",
-      "databaseTargets.id",
-      "environmentDatabaseAttachments.targetId",
-    )
-    .select([
-      "environmentDatabaseAttachments.id",
-      "environmentDatabaseAttachments.environmentId",
-      "environmentDatabaseAttachments.databaseId",
-      "environmentDatabaseAttachments.targetId",
-      "environmentDatabaseAttachments.mode",
-      "environmentDatabaseAttachments.createdAt",
-      "environments.name as environmentName",
-      "environments.type as environmentType",
-      "databaseTargets.name as targetName",
-    ])
-    .where("environmentDatabaseAttachments.databaseId", "=", databaseId)
-    .orderBy("environmentDatabaseAttachments.createdAt", "asc")
-    .execute();
-}
-
-export async function assertComputeService(
-  serviceId: string,
-): Promise<Selectable<Services>> {
-  const service = await db
-    .selectFrom("services")
-    .selectAll()
-    .where("id", "=", serviceId)
-    .executeTakeFirst();
-
-  if (!service) {
-    throw new Error("Service not found");
-  }
-
-  if (service.serviceType === "database") {
-    throw new Error(
-      "Database bindings are only supported for compute services",
-    );
-  }
-
-  return service;
 }

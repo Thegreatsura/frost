@@ -1,8 +1,5 @@
 import { ORPCError } from "@orpc/server";
-import {
-  cloneEnvironmentDatabaseTargets,
-  ensureEnvironmentPostgresDefaults,
-} from "@/lib/database-runtime";
+import { ensureEnvironmentPostgresNetworkAccess } from "@/lib/database-runtime";
 import { db } from "@/lib/db";
 import { deployEnvironment } from "@/lib/deployer";
 import { addLatestDeploymentsWithRuntimeStatus } from "@/lib/deployment-runtime";
@@ -147,18 +144,11 @@ export const environments = {
           });
         }
 
-        await cloneEnvironmentDatabaseTargets({
-          sourceEnvironmentId: sourceEnv.id,
-          targetEnvironmentId: id,
-        });
-
         if (sourceServices.length > 0) {
           shouldDeploy = true;
         }
       }
     }
-
-    await ensureEnvironmentPostgresDefaults(id);
 
     const environment = await db
       .selectFrom("environments")
@@ -171,6 +161,8 @@ export const environments = {
         message: "Failed to create environment",
       });
     }
+
+    await ensureEnvironmentPostgresNetworkAccess(id);
 
     if (shouldDeploy) {
       deployEnvironment(id).catch(console.error);
