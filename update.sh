@@ -60,6 +60,32 @@ ensure_env_value() {
   echo "${key}=${value}" >> "$file"
 }
 
+resolve_command_path() {
+  local name="$1"
+  local candidate
+
+  if command -v "$name" > /dev/null 2>&1; then
+    command -v "$name"
+    return 0
+  fi
+
+  for candidate in \
+    "/usr/local/sbin/$name" \
+    "/usr/local/bin/$name" \
+    "/usr/sbin/$name" \
+    "/usr/bin/$name" \
+    "/sbin/$name" \
+    "/bin/$name"
+  do
+    if [ -x "$candidate" ]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
 replace_env_value() {
   local file="$1"
   local key="$2"
@@ -102,24 +128,28 @@ count_non_empty_lines() {
 
 detect_zfs_pool() {
   local dataset_base="$1"
-  if ! command -v zpool > /dev/null 2>&1; then
+  local zpool_cmd
+  zpool_cmd=$(resolve_command_path "zpool" || true)
+  if [ -z "$zpool_cmd" ]; then
     return 0
   fi
   local pools
   local count
-  pools=$(zpool list -H -o name 2>/dev/null | awk 'NF {print}')
+  pools=$("$zpool_cmd" list -H -o name 2>/dev/null | awk 'NF {print}')
   count=$(count_non_empty_lines "$pools")
   if [ "$count" -eq 1 ]; then
     echo "$pools"
     return 0
   fi
 
-  if [ -z "$dataset_base" ] || ! command -v zfs > /dev/null 2>&1; then
+  local zfs_cmd
+  zfs_cmd=$(resolve_command_path "zfs" || true)
+  if [ -z "$dataset_base" ] || [ -z "$zfs_cmd" ]; then
     return 0
   fi
 
   local matches
-  matches=$(zfs list -H -o name 2>/dev/null | awk -v suffix="/$dataset_base" '
+  matches=$("$zfs_cmd" list -H -o name 2>/dev/null | awk -v suffix="/$dataset_base" '
     NF && length($0) > length(suffix) && substr($0, length($0) - length(suffix) + 1) == suffix {
       print substr($0, 1, length($0) - length(suffix))
     }
@@ -131,10 +161,17 @@ detect_zfs_pool() {
 }
 
 ensure_zfs_branching_setup() {
-  if ! command -v zfs > /dev/null 2>&1 || ! command -v zpool > /dev/null 2>&1; then
+  local zfs_cmd
+  local zpool_cmd
+  zfs_cmd=$(resolve_command_path "zfs" || true)
+  zpool_cmd=$(resolve_command_path "zpool" || true)
+
+  if [ -z "$zfs_cmd" ] || [ -z "$zpool_cmd" ]; then
     log "Installing zfsutils-linux..."
     apt-get update -qq || true
     apt-get install -y -qq zfsutils-linux > /dev/null || true
+    zfs_cmd=$(resolve_command_path "zfs" || true)
+    zpool_cmd=$(resolve_command_path "zpool" || true)
   fi
 
   local env_file="$FROST_DIR/.env"
@@ -163,17 +200,17 @@ ensure_zfs_branching_setup() {
     mkdir -p "$mount_base"
   fi
 
-  if [ -z "$pool" ] || ! command -v zfs > /dev/null 2>&1 || ! command -v zpool > /dev/null 2>&1; then
+  if [ -z "$pool" ] || [ -z "$zfs_cmd" ] || [ -z "$zpool_cmd" ]; then
     return 0
   fi
 
-  if ! zpool list -H -o name "$pool" > /dev/null 2>&1; then
+  if ! "$zpool_cmd" list -H -o name "$pool" > /dev/null 2>&1; then
     return 0
   fi
 
   base_dataset="$pool/$dataset_base"
-  if ! zfs list -H "$base_dataset" > /dev/null 2>&1; then
-    zfs create -p "$base_dataset" > /dev/null 2>&1 || true
+  if ! "$zfs_cmd" list -H "$base_dataset" > /dev/null 2>&1; then
+    "$zfs_cmd" create -p "$base_dataset" > /dev/null 2>&1 || true
   fi
 }
 

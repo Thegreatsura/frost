@@ -1,4 +1,5 @@
 import { execFile, execFileSync } from "node:child_process";
+import { accessSync, constants } from "node:fs";
 import { mkdir, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
@@ -9,6 +10,14 @@ import type {
 } from "./branch-storage-backend";
 
 const execFileAsync = promisify(execFile);
+const extraCommandDirs = [
+  "/usr/local/sbin",
+  "/usr/local/bin",
+  "/usr/sbin",
+  "/usr/bin",
+  "/sbin",
+  "/bin",
+];
 
 export interface ZfsBranchStorageOptions {
   pool: string;
@@ -96,16 +105,49 @@ function parseZfsNameList(value: string): string[] {
     .filter((item) => item.length > 0);
 }
 
+function isExecutableFile(path: string): boolean {
+  try {
+    accessSync(path, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function resolveSystemCommand(
+  command: string,
+  envPath = process.env.PATH ?? "",
+  dirs = extraCommandDirs,
+): string {
+  const searchDirs = [...envPath.split(":").filter(Boolean), ...dirs];
+  const seen = new Set<string>();
+
+  for (const dir of searchDirs) {
+    if (seen.has(dir)) {
+      continue;
+    }
+    seen.add(dir);
+    const candidate = join(dir, command);
+    if (isExecutableFile(candidate)) {
+      return candidate;
+    }
+  }
+
+  return command;
+}
+
 export function detectZfsHostState(): ZfsHostState | undefined {
+  const zpoolCommand = resolveSystemCommand("zpool");
+  const zfsCommand = resolveSystemCommand("zfs");
   try {
     return {
       pools: parseZfsNameList(
-        execFileSync("zpool", ["list", "-H", "-o", "name"], {
+        execFileSync(zpoolCommand, ["list", "-H", "-o", "name"], {
           encoding: "utf8",
         }),
       ),
       datasets: parseZfsNameList(
-        execFileSync("zfs", ["list", "-H", "-o", "name"], {
+        execFileSync(zfsCommand, ["list", "-H", "-o", "name"], {
           encoding: "utf8",
         }),
       ),
@@ -217,11 +259,15 @@ export class ZfsBranchStorage implements BranchStorageBackend {
   private readonly pool: string;
   private readonly datasetBase: string;
   private readonly mountBase: string;
+  private readonly zfsCommand: string;
+  private readonly zpoolCommand: string;
 
   constructor(options: ZfsBranchStorageOptions) {
     this.pool = options.pool.trim();
     this.datasetBase = normalizeDatasetBase(options.datasetBase);
     this.mountBase = options.mountBase;
+    this.zfsCommand = resolveSystemCommand("zfs");
+    this.zpoolCommand = resolveSystemCommand("zpool");
   }
 
   async assertReady(): Promise<void> {
@@ -237,13 +283,13 @@ export class ZfsBranchStorage implements BranchStorageBackend {
 
     await mkdir(this.mountBase, { recursive: true });
 
-    await runExec("zfs", ["list", "-H"]);
-    await runExec("zpool", ["list", "-H", "-o", "name", this.pool]);
+    await runExec(this.zfsCommand, ["list", "-H"]);
+    await runExec(this.zpoolCommand, ["list", "-H", "-o", "name", this.pool]);
 
     const baseDataset = this.getBaseDatasetPath();
     const exists = await this.datasetExistsByPath(baseDataset);
     if (!exists) {
-      await runExec("zfs", ["create", "-p", baseDataset]);
+      await runExec(this.zfsCommand, ["create", "-p", baseDataset]);
     }
 
     if (!(await this.datasetExistsByPath(baseDataset))) {
@@ -259,7 +305,7 @@ export class ZfsBranchStorage implements BranchStorageBackend {
 
     await this.removeStorage(storageRef);
     await mkdir(dirname(mountPath), { recursive: true });
-    await runExec("zfs", buildZfsCreateArgs(datasetPath, mountPath));
+    await runExec(this.zfsCommand, buildZfsCreateArgs(datasetPath, mountPath));
     await this.mountDataset(datasetPath);
 
     return this.toHandle(storageRef);
@@ -282,15 +328,17 @@ export class ZfsBranchStorage implements BranchStorageBackend {
     await mkdir(dirname(targetMountPath), { recursive: true });
 
     const snapshotName = `${sourceDatasetPath}@frost-${Date.now()}-${nanoid(6).toLowerCase()}`;
-    await runExec("zfs", ["snapshot", snapshotName]);
+    await runExec(this.zfsCommand, ["snapshot", snapshotName]);
 
     try {
       await runExec(
-        "zfs",
+        this.zfsCommand,
         buildZfsCloneArgs(snapshotName, targetDatasetPath, targetMountPath),
       );
     } catch (error) {
-      await runExec("zfs", ["destroy", snapshotName]).catch(() => undefined);
+      await runExec(this.zfsCommand, ["destroy", snapshotName]).catch(
+        () => undefined,
+      );
       throw error;
     }
     await this.mountDataset(targetDatasetPath);
@@ -309,18 +357,26 @@ export class ZfsBranchStorage implements BranchStorageBackend {
 
     await this.unmountDataset(liveDatasetPath);
     await this.unmountDataset(stagedDatasetPath);
-    await runExec("zfs", ["rename", liveDatasetPath, backupDatasetPath]);
+    await runExec(this.zfsCommand, [
+      "rename",
+      liveDatasetPath,
+      backupDatasetPath,
+    ]);
 
     try {
-      await runExec("zfs", ["rename", stagedDatasetPath, liveDatasetPath]);
-      await runExec("zfs", [
+      await runExec(this.zfsCommand, [
+        "rename",
+        stagedDatasetPath,
+        liveDatasetPath,
+      ]);
+      await runExec(this.zfsCommand, [
         "set",
         `mountpoint=${liveMountPath}`,
         liveDatasetPath,
       ]);
       await this.mountDataset(liveDatasetPath);
     } catch (error) {
-      await runExec("zfs", [
+      await runExec(this.zfsCommand, [
         "rename",
         backupDatasetPath,
         liveDatasetPath,
@@ -328,7 +384,7 @@ export class ZfsBranchStorage implements BranchStorageBackend {
       throw error;
     }
 
-    await runExec("zfs", ["destroy", "-r", backupDatasetPath]).catch(
+    await runExec(this.zfsCommand, ["destroy", "-r", backupDatasetPath]).catch(
       () => undefined,
     );
   }
@@ -340,7 +396,7 @@ export class ZfsBranchStorage implements BranchStorageBackend {
     await this.unmountDataset(datasetPath);
 
     try {
-      await runExec("zfs", ["destroy", "-r", datasetPath]);
+      await runExec(this.zfsCommand, ["destroy", "-r", datasetPath]);
     } catch (error) {
       if (!isDatasetNotFound(error)) {
         throw error;
@@ -356,7 +412,7 @@ export class ZfsBranchStorage implements BranchStorageBackend {
 
   private async datasetExistsByPath(datasetPath: string): Promise<boolean> {
     try {
-      await runExec("zfs", ["list", "-H", datasetPath]);
+      await runExec(this.zfsCommand, ["list", "-H", datasetPath]);
       return true;
     } catch {
       return false;
@@ -365,7 +421,7 @@ export class ZfsBranchStorage implements BranchStorageBackend {
 
   private async unmountDataset(datasetPath: string): Promise<void> {
     try {
-      await runExec("zfs", ["unmount", datasetPath]);
+      await runExec(this.zfsCommand, ["unmount", datasetPath]);
     } catch (error) {
       if (!isNotMountedError(error) && !isDatasetNotFound(error)) {
         throw error;
@@ -375,7 +431,7 @@ export class ZfsBranchStorage implements BranchStorageBackend {
 
   private async mountDataset(datasetPath: string): Promise<void> {
     try {
-      await runExec("zfs", ["mount", datasetPath]);
+      await runExec(this.zfsCommand, ["mount", datasetPath]);
     } catch (error) {
       if (!isAlreadyMountedError(error)) {
         throw error;

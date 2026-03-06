@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   buildZfsCloneArgs,
   buildZfsCreateArgs,
@@ -6,6 +8,7 @@ import {
   buildZfsMountPath,
   normalizeDatasetBase,
   normalizeStorageRef,
+  resolveSystemCommand,
   resolveZfsPool,
 } from "./zfs-branch-storage";
 
@@ -121,5 +124,21 @@ describe("resolveZfsPool", () => {
         },
       }),
     ).toBe("pool-b");
+  });
+});
+
+describe("resolveSystemCommand", () => {
+  test("finds commands in fallback dirs", () => {
+    const tempDir = mkdtempSync("/tmp/frost-zfs-command-");
+    const commandPath = join(tempDir, "zpool");
+
+    try {
+      writeFileSync(commandPath, "#!/bin/sh\nexit 0\n");
+      chmodSync(commandPath, 0o755);
+
+      expect(resolveSystemCommand("zpool", "", [tempDir])).toBe(commandPath);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 });
