@@ -3,4 +3,27 @@ version = 1
 name = "frost"
 
 [setup]
-script = "bun install"
+script = '''
+set -euo pipefail
+
+source_repo="$(cd "$(git rev-parse --git-common-dir)/.." && pwd -P)"
+git -C "$source_repo" fetch origin main
+
+if [ "$(git rev-parse --abbrev-ref HEAD)" = "HEAD" ]; then
+  worktree_root="$(git rev-parse --show-toplevel)"
+  worktree_id="$(basename "$(dirname "$worktree_root")")"
+  branch_name="codex/$worktree_id"
+
+  if git show-ref --verify --quiet "refs/heads/$branch_name"; then
+    git switch "$branch_name"
+    if git merge-base --is-ancestor HEAD origin/main; then
+      git merge --ff-only origin/main
+    fi
+  else
+    git switch -c "$branch_name" --track origin/main
+  fi
+fi
+
+bun install
+
+'''
