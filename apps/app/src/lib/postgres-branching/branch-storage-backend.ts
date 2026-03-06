@@ -1,4 +1,4 @@
-export type BranchStorageBackendName = "apfs" | "zfs";
+export type BranchStorageBackendName = "apfs" | "copy" | "zfs";
 
 export interface BranchStorageMetadata {
   storageBackend: BranchStorageBackendName;

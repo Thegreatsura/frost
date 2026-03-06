@@ -5,7 +5,7 @@ const databaseEngineSchema = z.enum(["postgres", "mysql"]);
 const databaseProviderSchema = z.enum(["postgres-docker", "mysql-docker"]);
 const databaseTargetKindSchema = z.enum(["branch", "instance"]);
 const databaseTargetLifecycleSchema = z.enum(["active", "stopped", "expired"]);
-const databaseStorageBackendSchema = z.enum(["apfs", "zfs"]);
+const databaseStorageBackendSchema = z.enum(["apfs", "copy", "zfs"]);
 const backupIntervalUnitSchema = z.enum(["minutes", "hours", "days"]);
 const backupS3ProviderSchema = z.enum([
   "aws",

@@ -5,6 +5,7 @@ import type {
   BranchStorageBackend,
   BranchStorageBackendName,
 } from "./branch-storage-backend";
+import { CopyBranchStorage } from "./copy-branch-storage";
 import {
   detectZfsHostState,
   resolveZfsPool,
@@ -13,24 +14,32 @@ import {
   type ZfsHostState,
 } from "./zfs-branch-storage";
 
-export function resolveBranchStorageBackendName(
-  platform: NodeJS.Platform,
-): BranchStorageBackendName {
-  if (platform === "darwin") {
+export function resolveBranchStorageBackendName(input: {
+  platform: NodeJS.Platform;
+  env: NodeJS.ProcessEnv;
+  hostState?: ZfsHostState;
+}): BranchStorageBackendName {
+  if (input.platform === "darwin") {
     return "apfs";
   }
 
-  if (platform === "linux") {
-    return "zfs";
+  if (input.platform === "linux") {
+    return resolveZfsOptions(input.env, input.hostState).pool.length > 0
+      ? "zfs"
+      : "copy";
   }
 
   throw new Error(
-    `Postgres branching is only supported on macOS and Linux. Current platform: ${platform}`,
+    `Postgres branching is only supported on macOS and Linux. Current platform: ${input.platform}`,
   );
 }
 
 export function resolveApfsBasePath(env: NodeJS.ProcessEnv): string {
   return env.FROST_POSTGRES_APFS_BASE ?? join(getDataDir(), "postgres", "apfs");
+}
+
+export function resolveCopyBasePath(env: NodeJS.ProcessEnv): string {
+  return env.FROST_POSTGRES_COPY_BASE ?? join(getDataDir(), "postgres", "copy");
 }
 
 export function resolveZfsOptions(
@@ -54,7 +63,7 @@ export function createBranchStorageBackendForPlatform(input: {
   platform: NodeJS.Platform;
   env: NodeJS.ProcessEnv;
 }): BranchStorageBackend {
-  const backendName = resolveBranchStorageBackendName(input.platform);
+  const backendName = resolveBranchStorageBackendName(input);
   return createBranchStorageBackendByName(backendName, input.env);
 }
 
@@ -72,6 +81,8 @@ export function createBranchStorageBackendByName(
   switch (backendName) {
     case "apfs":
       return new ApfsBranchStorage({ basePath: resolveApfsBasePath(env) });
+    case "copy":
+      return new CopyBranchStorage({ basePath: resolveCopyBasePath(env) });
     case "zfs":
       return new ZfsBranchStorage(resolveZfsOptions(env));
   }

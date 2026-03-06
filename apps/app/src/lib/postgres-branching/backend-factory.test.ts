@@ -3,22 +3,53 @@ import {
   createBranchStorageBackendByName,
   resolveApfsBasePath,
   resolveBranchStorageBackendName,
+  resolveCopyBasePath,
   resolveZfsOptions,
 } from "./backend-factory";
 
 describe("resolveBranchStorageBackendName", () => {
   test("returns apfs on macOS", () => {
-    expect(resolveBranchStorageBackendName("darwin")).toBe("apfs");
+    expect(
+      resolveBranchStorageBackendName({
+        platform: "darwin",
+        env: { NODE_ENV: "test" },
+      }),
+    ).toBe("apfs");
   });
 
-  test("returns zfs on linux", () => {
-    expect(resolveBranchStorageBackendName("linux")).toBe("zfs");
+  test("returns zfs on linux when a pool exists", () => {
+    expect(
+      resolveBranchStorageBackendName({
+        platform: "linux",
+        env: { NODE_ENV: "test" },
+        hostState: {
+          pools: ["tank"],
+          datasets: [],
+        },
+      }),
+    ).toBe("zfs");
+  });
+
+  test("returns copy on linux when no pool exists", () => {
+    expect(
+      resolveBranchStorageBackendName({
+        platform: "linux",
+        env: { NODE_ENV: "test" },
+        hostState: {
+          pools: [],
+          datasets: [],
+        },
+      }),
+    ).toBe("copy");
   });
 
   test("throws on unsupported platform", () => {
-    expect(() => resolveBranchStorageBackendName("win32")).toThrow(
-      "Postgres branching is only supported",
-    );
+    expect(() =>
+      resolveBranchStorageBackendName({
+        platform: "win32",
+        env: { NODE_ENV: "test" },
+      }),
+    ).toThrow("Postgres branching is only supported");
   });
 });
 
@@ -30,6 +61,17 @@ describe("resolveApfsBasePath", () => {
         FROST_POSTGRES_APFS_BASE: "/tmp/custom-apfs",
       }),
     ).toBe("/tmp/custom-apfs");
+  });
+});
+
+describe("resolveCopyBasePath", () => {
+  test("uses env override", () => {
+    expect(
+      resolveCopyBasePath({
+        NODE_ENV: "test",
+        FROST_POSTGRES_COPY_BASE: "/tmp/custom-copy",
+      }),
+    ).toBe("/tmp/custom-copy");
   });
 });
 
@@ -107,5 +149,13 @@ describe("createBranchStorageBackendByName", () => {
       FROST_POSTGRES_ZFS_MOUNT_BASE: "/tmp/zfs",
     });
     expect(backend.name).toBe("zfs");
+  });
+
+  test("creates copy backend", () => {
+    const backend = createBranchStorageBackendByName("copy", {
+      NODE_ENV: "test",
+      FROST_POSTGRES_COPY_BASE: "/tmp/copy-base",
+    });
+    expect(backend.name).toBe("copy");
   });
 });

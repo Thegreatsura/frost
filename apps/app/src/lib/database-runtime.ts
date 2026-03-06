@@ -237,6 +237,7 @@ function parseProviderRef(json: string): ProviderRef {
   if (
     hasStorageBackend &&
     value.storageBackend !== "apfs" &&
+    value.storageBackend !== "copy" &&
     value.storageBackend !== "zfs"
   ) {
     throw new Error("Invalid provider reference");
